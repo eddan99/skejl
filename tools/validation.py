@@ -50,7 +50,7 @@ def validate_generated_image(original_image_path: str, generated_image_raw_data:
 
     # STEG 5: Skicka båda bilderna + prompten till Gemini
     response = gemini_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=[
             # Först: originalbilden
             types.Part(inline_data=types.Blob(mime_type=original_image_type, data=original_image_raw_data)),
@@ -134,7 +134,7 @@ def validate_generated_variant(original_image_paths: list, generated_variant_raw
 
     # STEG 6: Skicka allt till Gemini
     response = gemini_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=contents
     )
 

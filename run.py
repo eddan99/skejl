@@ -21,33 +21,28 @@ OUTPUT_DIR = PROJECT_ROOT / "data" / "output"
 
 def find_all_product_images(base_image_path: Path) -> list:
     """
-    Hittar alla bilder för en produkt (front, back, side).
+    Hittar alla bilder för en produkt.
+
+    Namnkonvention:
+      - Huvudbild: honda.jpg
+      - Baksida: honda_back.jpg
+      - Sidovy: honda_side.jpg
 
     Exempel:
-      - Input: data/input/yourturn.jpg
-      - Output: [data/input/yourturn.jpg]
-
-      eller om det finns flera:
-
-      - Input: data/input/yourturn.jpg
-      - Output: [data/input/yourturn_front.jpg, data/input/yourturn_back.jpg, data/input/yourturn_side.jpg]
+      - Input: data/input/honda.jpg
+      - Output: [data/input/honda.jpg, data/input/honda_back.jpg, data/input/honda_side.jpg]
     """
-    stem = base_image_path.stem  # "yourturn"
+    stem = base_image_path.stem  # "honda"
     parent = base_image_path.parent  # data/input/
+    ext = base_image_path.suffix  # ".jpg"
 
-    # Kolla om det finns flera bilder med suffixer (_front, _back, _side)
-    variants = ["_front", "_back", "_side"]
-    found_images = []
+    found_images = [str(base_image_path)]  # Lägg alltid till huvudbilden först
 
-    for variant in variants:
-        for ext in [".jpg", ".png"]:
-            variant_path = parent / f"{stem}{variant}{ext}"
-            if variant_path.exists():
-                found_images.append(str(variant_path))
-
-    # Om inga variant-bilder hittades, använd bara originalbilden
-    if not found_images:
-        found_images.append(str(base_image_path))
+    # Kolla om det finns back/side bilder
+    for variant in ["_back", "_side"]:
+        variant_path = parent / f"{stem}{variant}{ext}"
+        if variant_path.exists():
+            found_images.append(str(variant_path))
 
     return found_images
 

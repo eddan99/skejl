@@ -91,6 +91,7 @@ REFERENCE IMAGES provided (in order):
 2. GENERATED SCENE IMAGE: Shows a person wearing the garment in a specific environment (front view)
 
 YOUR TASK: Generate THE EXACT SAME SCENE but photographed {angle_description}.
+Aspect_ratio = "4:5"
 
 REQUIREMENTS:
 - Use the ORIGINAL GARMENT IMAGES to see how the {angle_description} of the garment actually looks (color, texture, graphics, fit)

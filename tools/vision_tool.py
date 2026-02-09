@@ -102,7 +102,7 @@ def analyze_product_image(image_path: str, brand_identity: str = None) -> dict:
 
     # STEG 6: Skicka bilden + prompten till Gemini
     response = gemini_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=[
             # Först: bilden (som rå data)
             types.Part(inline_data=types.Blob(mime_type=image_type, data=image_raw_data)),
