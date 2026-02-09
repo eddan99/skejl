@@ -1,0 +1,13 @@
+[
+  { 
+    "image": "honda_front.jpg",
+    "title": "Hoodie Relaxed Fit",
+    "art_nr": "1313-9211",
+    "color": "Grey",
+    "fit": "Loose fit",
+    "composition": {
+      "Shell": "100% Cotton"
+    },
+    "gender": "male"
+  }
+]
