@@ -59,6 +59,8 @@ Check these specific things:
 - Graphics/patterns: If there are prints, logos or patterns - are they exactly the same?
 - Fit/silhouette: Does the garment appear to have the same fit and shape?
 - Texture: Does the fabric/material look the same?
+- Are the image_format 4:5?
+
 
 IMPORTANT:
 - Respond ONLY with "APPROVED" or "REJECTED"
@@ -91,7 +93,7 @@ REFERENCE IMAGES provided (in order):
 2. GENERATED SCENE IMAGE: Shows a person wearing the garment in a specific environment (front view)
 
 YOUR TASK: Generate THE EXACT SAME SCENE but photographed {angle_description}.
-Aspect_ratio = "4:5"
+image_format = "4:5"
 
 REQUIREMENTS:
 - Use the ORIGINAL GARMENT IMAGES to see how the {angle_description} of the garment actually looks (color, texture, graphics, fit)
@@ -128,6 +130,7 @@ Check these specific things:
 - Graphics/patterns: IF there are prints/logos, are they positioned correctly? Front prints should stay on front, back prints on back
 - Fit/silhouette: Does the garment have the same fit and shape?
 - Texture: Does the fabric/material look the same?
+- Are the image_format 4:5?
 
 IMPORTANT:
 - Many garments have NO prints at all - this is completely normal

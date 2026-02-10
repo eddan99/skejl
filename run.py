@@ -14,6 +14,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from tools.vision_tool import analyze_product_image
 from tools.image_gen_tool import generate_product_image, generate_variant
 from tools.validation import validate_generated_image, validate_generated_variant
+from tools.shopify_tool import upload_product_to_shopify
+from tools.image_utils import crop_to_4_5_ratio
+import os
 
 INPUT_DIR = PROJECT_ROOT / "data" / "input"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output"
@@ -99,6 +102,10 @@ def main():
                     time.sleep(3)  # Vänta innan nästa försök
                 continue
 
+            # Croppa till 4:5 format
+            print(f"  [Croppar till 4:5 format...]")
+            image_bytes = crop_to_4_5_ratio(image_bytes)
+
             # Paus innan validering
             time.sleep(3)
 
@@ -140,51 +147,112 @@ def main():
             original_images = find_all_product_images(image_path)
 
             for variant_angle in ["side", "back"]:
-                time.sleep(3)  # Paus innan variant-generering
-
                 print(f"\n--- Genererar {variant_angle}-variant: {image_path.name} ---")
 
-                # Generera variant med originalbilder som referens
-                variant_bytes, variant_log = generate_variant(final_image_bytes, variant_angle, original_images)
+                max_variant_attempts = 2
+                final_variant_bytes = None
 
-                # Printa variant-log
-                for entry in variant_log:
-                    print(f"  [{entry}]")
+                for attempt in range(1, max_variant_attempts + 1):
+                    print(f"  [Försök {attempt}/{max_variant_attempts}]")
 
-                # Om generering misslyckades
-                if not variant_bytes:
-                    print(f"  Kunde inte generera {variant_angle}-variant")
-                    continue
+                    time.sleep(3)  # Paus innan variant-generering
 
-                # Paus innan validering
-                time.sleep(3)
+                    # Generera variant med originalbilder som referens
+                    variant_bytes, variant_log = generate_variant(final_image_bytes, variant_angle, original_images)
 
-                # Validera mot samma originalbilder som användes för generering
-                print(f"  [Validerar {variant_angle}-variant mot {len(original_images)} originalbild(er)...]")
+                    # Printa variant-log
+                    for entry in variant_log:
+                        print(f"  [{entry}]")
 
-                # Validera varianten
-                is_valid, validation_report = validate_generated_variant(
-                    original_images,
-                    variant_bytes,
-                    result,
-                    variant_angle
-                )
+                    # Om generering misslyckades
+                    if not variant_bytes:
+                        print(f"  [Generering av {variant_angle}-variant misslyckades på försök {attempt}]")
+                        if attempt < max_variant_attempts:
+                            time.sleep(3)
+                        continue
 
-                # Printa valideringsresultat
-                print(f"  [Validering: {'GODKÄND' if is_valid else 'UNDERKÄND'}]")
-                report_lines = validation_report.split('\n')
-                for line in report_lines[1:]:  # Skippa första raden (APPROVED/REJECTED)
-                    if line.strip():
-                        print(f"  [{line.strip()}]")
+                    # Croppa till 4:5 format
+                    print(f"  [Croppar {variant_angle}-variant till 4:5 format...]")
+                    variant_bytes = crop_to_4_5_ratio(variant_bytes)
 
-                # Spara variant om validering godkändes
-                if is_valid:
+                    # Paus innan validering
+                    time.sleep(3)
+
+                    # Validera mot samma originalbilder som användes för generering
+                    print(f"  [Validerar {variant_angle}-variant mot {len(original_images)} originalbild(er)...]")
+
+                    # Validera varianten
+                    is_valid, validation_report = validate_generated_variant(
+                        original_images,
+                        variant_bytes,
+                        result,
+                        variant_angle
+                    )
+
+                    # Printa valideringsresultat
+                    print(f"  [Validering: {'GODKÄND' if is_valid else 'UNDERKÄND'}]")
+                    report_lines = validation_report.split('\n')
+                    for line in report_lines[1:]:  # Skippa första raden (APPROVED/REJECTED)
+                        if line.strip():
+                            print(f"  [{line.strip()}]")
+
+                    # Om varianten är godkänd - spara och avsluta
+                    if is_valid:
+                        final_variant_bytes = variant_bytes
+                        print(f"  [{variant_angle.capitalize()}-variant godkänd på försök {attempt}]")
+                        break
+                    else:
+                        print(f"  [{variant_angle.capitalize()}-variant underkänd på försök {attempt}]")
+                        if attempt < max_variant_attempts:
+                            print(f"  [Försöker igen...]")
+                            time.sleep(3)
+
+                # Spara variant om vi lyckades få en godkänd
+                if final_variant_bytes:
                     variant_path = OUTPUT_DIR / f"{image_path.stem}_generated_{variant_angle}.jpg"
                     with open(variant_path, "wb") as f:
-                        f.write(variant_bytes)
+                        f.write(final_variant_bytes)
                     print(f"Sparad: {variant_path.name}")
                 else:
-                    print(f"  [{variant_angle.capitalize()}-variant underkänd vid validering, sparas inte]")
+                    print(f"  Hoppar över {variant_angle}-variant — kunde inte generera godkänd efter {max_variant_attempts} försök")
+
+            # Steg 4: Ladda upp till Shopify (om aktiverat)
+            if os.getenv("UPLOAD_TO_SHOPIFY", "false").lower() == "true":
+                time.sleep(2)
+                print(f"\n--- Laddar upp till Shopify: {image_path.name} ---")
+
+                # Samla alla genererade bilder som finns
+                generated_images = []
+
+                # Huvudbild (front)
+                main_img = OUTPUT_DIR / f"{image_path.stem}_generated.jpg"
+                if main_img.exists():
+                    generated_images.append(str(main_img))
+
+                # Varianter (side, back)
+                for variant in ["side", "back"]:
+                    variant_img = OUTPUT_DIR / f"{image_path.stem}_generated_{variant}.jpg"
+                    if variant_img.exists():
+                        generated_images.append(str(variant_img))
+
+                # Ladda upp om vi har minst huvudbilden
+                if generated_images:
+                    try:
+                        product_id = upload_product_to_shopify(
+                            product_name=image_path.stem,
+                            analysis_file=str(OUTPUT_DIR / f"{image_path.stem}_analysis.json"),
+                            generated_images=generated_images
+                        )
+
+                        if product_id:
+                            print(f"✅ Produkt uppladdad till Shopify! (ID: {product_id})")
+                        else:
+                            print(f"⚠️  Kunde inte ladda upp till Shopify")
+
+                    except Exception as e:
+                        print(f"❌ Shopify upload fel: {e}")
+                else:
+                    print(f"⚠️  Inga genererade bilder att ladda upp")
 
         else:
             print(f"  Hoppar över {image_path.name} — kunde inte generera godkänd bild efter {max_attempts} försök")
