@@ -1,16 +1,11 @@
-import os
-from google import genai
 from google.genai import types
 
-from logic.prompts import build_image_gen_prompt, build_variant_prompt
+from tools.gemini_client import get_gemini_client
+from tools.prompts import build_image_gen_prompt, build_variant_prompt
 
 
 def generate_product_image(reference_image_path: str, analysis: dict) -> tuple:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY missing in .env")
-
-    nano_banana_client = genai.Client(api_key=api_key)
+    nano_banana_client = get_gemini_client()
 
     decision_log = []
     with open(reference_image_path, "rb") as file:
@@ -23,7 +18,7 @@ def generate_product_image(reference_image_path: str, analysis: dict) -> tuple:
 
     prompt_text = build_image_gen_prompt(analysis)
     decision_log.append("Sending original image and prompt to nano-banana-pro for generation")
-    
+
     response = nano_banana_client.models.generate_content(
         model="nano-banana-pro-preview",
         contents=[
@@ -53,12 +48,7 @@ def generate_product_image(reference_image_path: str, analysis: dict) -> tuple:
 
 
 def generate_variant(approved_image_raw_data: bytes, view_angle: str, original_image_paths: list = None) -> tuple:
-
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY missing in .env")
-
-    nano_banana_client = genai.Client(api_key=api_key)
+    nano_banana_client = get_gemini_client()
 
     decision_log = []
 

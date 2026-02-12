@@ -1,16 +1,11 @@
-import os
-from google import genai
 from google.genai import types
 
-from logic.prompts import build_validation_prompt, build_variant_validation_prompt
+from tools.gemini_client import get_gemini_client, get_model_name
+from tools.prompts import build_validation_prompt, build_variant_validation_prompt
 
 
 def validate_generated_image(original_image_path: str, generated_image_raw_data: bytes, analysis: dict) -> tuple:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY saknas i .env")
-
-    gemini_client = genai.Client(api_key=api_key)
+    gemini_client = get_gemini_client()
 
     with open(original_image_path, "rb") as file:
         original_image_raw_data = file.read()
@@ -28,7 +23,7 @@ def validate_generated_image(original_image_path: str, generated_image_raw_data:
     validation_prompt = build_validation_prompt(color, garment_type)
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=[
             types.Part(inline_data=types.Blob(mime_type=original_image_type, data=original_image_raw_data)),
             types.Part(inline_data=types.Blob(mime_type=generated_image_type, data=generated_image_raw_data)),
@@ -44,11 +39,7 @@ def validate_generated_image(original_image_path: str, generated_image_raw_data:
 
 
 def validate_generated_variant(original_image_paths: list, generated_variant_raw_data: bytes, analysis: dict, view_angle: str) -> tuple:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY saknas i .env")
-
-    gemini_client = genai.Client(api_key=api_key)
+    gemini_client = get_gemini_client()
 
     original_images_data = []
     for image_path in original_image_paths:
@@ -79,7 +70,7 @@ def validate_generated_variant(original_image_paths: list, generated_variant_raw
     contents.append(types.Part(text=validation_prompt))
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=contents
     )
     result_text = response.text.strip()

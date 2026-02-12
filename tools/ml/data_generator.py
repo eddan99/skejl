@@ -4,9 +4,11 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Setup path for imports
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from config.paths import CONVERSION_DB_JSON
 from tools.taxonomy import (
     GARMENT_TYPES,
     COLORS,
@@ -19,8 +21,6 @@ from tools.taxonomy import (
     EXPRESSIONS,
     ANGLES
 )
-
-OUTPUT_PATH = PROJECT_ROOT / "data" / "conversion_db.json"
 
 
 def generate_realistic_performance(
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     print("Generating synthetic dataset with 1000 products...")
 
     dataset = generate_dataset(num_products=1000)
-    save_dataset(dataset, OUTPUT_PATH)
+    save_dataset(dataset, CONVERSION_DB_JSON)
     print_statistics(dataset)
 
     print("Done")

@@ -1,21 +1,19 @@
-import os
 import json
-from pathlib import Path
-from google import genai
 from google.genai import types
 
-from logic.prompts import (
+from config.paths import PRODUCTS_JSON
+from tools.gemini_client import get_gemini_client, get_model_name
+from tools.json_utils import parse_gemini_response
+from tools.prompts import (
     build_analysis_prompt,
     build_feature_extraction_prompt,
     build_description_prompt
 )
 from tools.taxonomy import normalize_product_features
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PRODUCTS_JSON = PROJECT_ROOT / "data" / "input" / "products.json"
-
 
 def load_product_data(image_path: str) -> dict:
+    from pathlib import Path
     filename_without_extension = Path(image_path).stem
 
     with open(PRODUCTS_JSON, "r", encoding="utf-8") as file:
@@ -25,28 +23,13 @@ def load_product_data(image_path: str) -> dict:
         product_filename = Path(product["image"]).stem
 
         if product_filename == filename_without_extension:
-            return product 
+            return product
 
     raise ValueError(f"No product found for image: {image_path}")
 
 
-def parse_gemini_response(gemini_text: str) -> dict:
-    text = gemini_text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        text = "\n".join(lines[1:-1])
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {"error": "Failed to parse JSON", "raw": gemini_text}
-
-
 def analyze_product_image(image_path: str, brand_identity: str = None) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY saknas i .env")
-
-    gemini_client = genai.Client(api_key=api_key)
+    gemini_client = get_gemini_client()
 
     with open(image_path, "rb") as file:
         image_raw_data = file.read()
@@ -61,7 +44,7 @@ def analyze_product_image(image_path: str, brand_identity: str = None) -> dict:
     prompt_text = build_analysis_prompt(product_metadata, brand_identity)
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=[
             types.Part(inline_data=types.Blob(mime_type=image_type, data=image_raw_data)),
             types.Part(text=prompt_text)
@@ -71,11 +54,7 @@ def analyze_product_image(image_path: str, brand_identity: str = None) -> dict:
 
 
 def extract_product_features(image_path: str) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY saknas i .env")
-
-    gemini_client = genai.Client(api_key=api_key)
+    gemini_client = get_gemini_client()
 
     with open(image_path, "rb") as file:
         image_raw_data = file.read()
@@ -90,7 +69,7 @@ def extract_product_features(image_path: str) -> dict:
     prompt_text = build_feature_extraction_prompt(product_metadata)
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=[
             types.Part(inline_data=types.Blob(mime_type=image_type, data=image_raw_data)),
             types.Part(text=prompt_text)
@@ -110,13 +89,8 @@ def generate_product_description(
     photography_scenario: dict,
     brand_identity: str = None
 ) -> str:
+    gemini_client = get_gemini_client()
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY saknas i .env")
-
-    gemini_client = genai.Client(api_key=api_key)
-    
     prompt_text = build_description_prompt(
         product_features,
         photography_scenario,
@@ -124,7 +98,7 @@ def generate_product_description(
     )
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=prompt_text
     )
 

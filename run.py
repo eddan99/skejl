@@ -6,9 +6,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Setup path for imports
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from config.settings import settings
+from config.paths import INPUT_DIR, OUTPUT_DIR, ensure_directories
 from tools.vision_tool import (
     analyze_product_image,
     extract_product_features,
@@ -21,10 +24,6 @@ from tools.image_utils import crop_to_4_5_ratio
 from tools.ml.ml_predictor import predict_image_settings
 from tools.ml.scenario_generator import generate_photography_scenario
 from logic.agent import multi_agent_debate
-import os
-
-INPUT_DIR = PROJECT_ROOT / "data" / "input"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "output"
 
 def find_all_product_images(base_image_path: Path) -> list:
     stem = base_image_path.stem
@@ -42,13 +41,16 @@ def find_all_product_images(base_image_path: Path) -> list:
 
 
 def main():
-    use_ml = os.getenv("USE_ML_PREDICTION", "false").lower() == "true"
+    # Ensure output directories exist
+    ensure_directories()
+
+    use_ml = settings.USE_ML_PREDICTION
 
     if use_ml:
         print("ML-DRIVEN MODE ENABLED")
     else:
         print("LEGACY MODE")
-        
+
     all_images = sorted([f for f in INPUT_DIR.iterdir() if f.suffix in ['.png', '.jpg']])
 
     images = [img for img in all_images if not ("_back" in img.stem or "_side" in img.stem)]
@@ -121,7 +123,6 @@ def main():
         print("ANALYSIS RESULT:")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
-        OUTPUT_DIR.mkdir(exist_ok=True)
         output_file = OUTPUT_DIR / f"{image_path.stem}_analysis.json"
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
@@ -131,7 +132,7 @@ def main():
 
         print(f"Generating image: {image_path.name}")
 
-        max_attempts = 2
+        max_attempts = settings.MAX_GENERATION_ATTEMPTS
         final_image_bytes = None
 
         for attempt in range(1, max_attempts + 1):
@@ -186,7 +187,7 @@ def main():
             for variant_angle in ["side", "back"]:
                 print(f"Generating {variant_angle}-variant: {image_path.name}")
 
-                max_variant_attempts = 2
+                max_variant_attempts = settings.MAX_VARIANT_ATTEMPTS
                 final_variant_bytes = None
 
                 for attempt in range(1, max_variant_attempts + 1):
@@ -241,7 +242,7 @@ def main():
                 else:
                     print(f"Skipping {variant_angle}variant. could not generate approved variant after {max_variant_attempts} attempts")
 
-            if os.getenv("UPLOAD_TO_SHOPIFY", "false").lower() == "true":
+            if settings.UPLOAD_TO_SHOPIFY:
                 time.sleep(2)
                 print(f"Uploading {image_path.name} to Shopify")
 
@@ -277,8 +278,8 @@ def main():
             print(f"Skipping {image_path.name} — Could not generate image after {max_attempts} attempts")
 
         if i < len(images) - 1:
-            time.sleep(5)
-            print("Waiting 5 seconds to avoid rate limit.")
+            time.sleep(settings.PROCESSING_DELAY)
+            print(f"Waiting {settings.PROCESSING_DELAY} seconds to avoid rate limit.")
 
 if __name__ == "__main__":
     main()

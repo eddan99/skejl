@@ -12,6 +12,7 @@ Output: 6 image_settings + predicted conversion_rate
 
 import json
 import os
+import sys
 import joblib
 import numpy as np
 from pathlib import Path
@@ -24,12 +25,18 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_PATH = PROJECT_ROOT / "data" / "conversion_db.json"
-MODEL_DIR = PROJECT_ROOT / "data" / "models"
-MODEL_PATH = MODEL_DIR / "rf_model.pkl"
-ENCODERS_PATH = MODEL_DIR / "encoders.pkl"
-METADATA_PATH = MODEL_DIR / "metadata.json"
+# Setup path for imports
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from config.paths import (
+    CONVERSION_DB_JSON,
+    MODELS_DIR,
+    RF_MODEL_PATH,
+    LABEL_ENCODERS_PATH,
+    METADATA_PATH,
+    ensure_directories
+)
 
 
 def train_model(min_impressions: int = 1000, test_size: float = 0.2) -> Dict:
@@ -43,9 +50,9 @@ def train_model(min_impressions: int = 1000, test_size: float = 0.2) -> Dict:
     Returns:
         Dict with training metrics
     """
-    print(f"Loading data from {DATA_PATH}...")
+    print(f"Loading data from {CONVERSION_DB_JSON}...")
 
-    with open(DATA_PATH, 'r') as f:
+    with open(CONVERSION_DB_JSON, 'r') as f:
         data = json.load(f)
 
     products = data['products']
@@ -146,10 +153,10 @@ def train_model(min_impressions: int = 1000, test_size: float = 0.2) -> Dict:
     print(f"  Average accuracy: {avg_accuracy:.2%}")
 
     # Save model and encoders
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"Saving model to {MODEL_PATH}...")
-    joblib.dump(model, MODEL_PATH)
+    print(f"Saving model to {RF_MODEL_PATH}...")
+    joblib.dump(model, RF_MODEL_PATH)
 
     encoders = {
         'features': feature_encoders,
@@ -157,7 +164,7 @@ def train_model(min_impressions: int = 1000, test_size: float = 0.2) -> Dict:
         'feature_names': feature_names,
         'target_names': target_names
     }
-    joblib.dump(encoders, ENCODERS_PATH)
+    joblib.dump(encoders, LABEL_ENCODERS_PATH)
 
     # Save metadata
     metadata = {
@@ -178,13 +185,13 @@ def train_model(min_impressions: int = 1000, test_size: float = 0.2) -> Dict:
 
 def _load_model() -> Tuple:
     """Load trained model and encoders."""
-    if not MODEL_PATH.exists():
+    if not RF_MODEL_PATH.exists():
         raise FileNotFoundError(
-            f"Model not found at {MODEL_PATH}. Run train_model() first."
+            f"Model not found at {RF_MODEL_PATH}. Run train_model() first."
         )
 
-    model = joblib.load(MODEL_PATH)
-    encoders = joblib.load(ENCODERS_PATH)
+    model = joblib.load(RF_MODEL_PATH)
+    encoders = joblib.load(LABEL_ENCODERS_PATH)
 
     return model, encoders
 
@@ -230,7 +237,7 @@ def _estimate_conversion_rate(
     """
     Estimate conversion rate by finding similar products in historical data.
     """
-    with open(DATA_PATH, 'r') as f:
+    with open(CONVERSION_DB_JSON, 'r') as f:
         data = json.load(f)
 
     products = data['products']

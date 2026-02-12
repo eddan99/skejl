@@ -10,16 +10,18 @@ Run this before enabling ML predictions in production.
 """
 
 import json
+import sys
 import numpy as np
 from pathlib import Path
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
 import joblib
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_PATH = PROJECT_ROOT / "data" / "conversion_db.json"
-MODEL_PATH = PROJECT_ROOT / "data" / "models" / "rf_model.pkl"
-ENCODERS_PATH = PROJECT_ROOT / "data" / "models" / "encoders.pkl"
+# Setup path for imports
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from config.paths import CONVERSION_DB_JSON, RF_RF_MODEL_PATH, LABEL_LABEL_ENCODERS_PATH
 
 
 def calculate_top_k_accuracy(y_true, y_pred_proba, k=3):
@@ -54,11 +56,11 @@ def validate_model():
     print("Loading model and data...")
 
     # Load model and encoders
-    model = joblib.load(MODEL_PATH)
-    encoders = joblib.load(ENCODERS_PATH)
+    model = joblib.load(RF_MODEL_PATH)
+    encoders = joblib.load(LABEL_ENCODERS_PATH)
 
     # Load data
-    with open(DATA_PATH, 'r') as f:
+    with open(CONVERSION_DB_JSON, 'r') as f:
         data = json.load(f)
 
     products = data['products']

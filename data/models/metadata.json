@@ -2,13 +2,13 @@
   "training_size": 800,
   "test_size": 200,
   "accuracies": {
-    "style": 0.13,
-    "lighting": 0.205,
-    "background": 0.17,
-    "pose": 0.11,
-    "expression": 0.175,
-    "angle": 0.235
+    "style": 0.16,
+    "lighting": 0.155,
+    "background": 0.15,
+    "pose": 0.145,
+    "expression": 0.2,
+    "angle": 0.22
   },
-  "avg_accuracy": 0.1708333333333333,
+  "avg_accuracy": 0.17166666666666666,
   "min_impressions": 1000
 }

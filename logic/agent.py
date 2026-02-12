@@ -9,14 +9,16 @@ Three agents debate to finalize image settings:
 Single-round debate: Optimizer → Creative → Moderator → Final decision
 """
 
-import os
 import json
 from typing import Dict
-from google import genai
 
-DEFAULT_BRAND_IDENTITY = (
-    "A modern, minimalist e-commerce brand. Clean, confident, and always "
-    "doing references to breaking bad series"
+from config.settings import settings
+from tools.gemini_client import get_gemini_client, get_model_name
+from tools.json_utils import parse_gemini_response
+from tools.prompts import (
+    build_optimizer_prompt,
+    build_creative_prompt,
+    build_moderator_prompt
 )
 
 
@@ -32,44 +34,15 @@ def _run_optimizer_agent(ml_prediction: Dict) -> str:
     Returns:
         Optimizer's argument as string
     """
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in environment")
-
-    client = genai.Client(api_key=api_key)
-
-    settings = ml_prediction['image_settings']
-    conversion = ml_prediction['predicted_conversion_rate']
-    confidence = ml_prediction.get('confidence', 0)
-
-    prompt = f"""You are a data-driven optimizer for e-commerce product photography.
-
-Your role: Advocate for proven, high-converting image settings based on ML analysis.
-
-ML PREDICTION:
-{json.dumps(settings, indent=2)}
-
-EXPECTED CONVERSION RATE: {conversion*100:.2f}%
-MODEL CONFIDENCE: {confidence*100:.1f}%
-
-REASONING:
-{ml_prediction.get('reasoning', 'Based on historical performance data')}
-
-Make your case for following this data-driven approach. Be specific about:
-1. Why these settings are predicted to perform well
-2. What the data shows about similar products
-3. The business value of optimizing for conversion
-
-Keep your argument concise (2-3 paragraphs). Focus on facts and performance metrics.
-"""
+    client = get_gemini_client()
+    prompt = build_optimizer_prompt(ml_prediction)
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=prompt
     )
 
     return response.text.strip()
-
 
 def _run_creative_agent(
     ml_prediction: Dict,
@@ -89,46 +62,15 @@ def _run_creative_agent(
     Returns:
         Creative's argument as string
     """
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in environment")
-
-    client = genai.Client(api_key=api_key)
+    client = get_gemini_client()
 
     if brand_identity is None:
-        brand_identity = DEFAULT_BRAND_IDENTITY
+        brand_identity = settings.DEFAULT_BRAND_IDENTITY
 
-    settings = ml_prediction['image_settings']
-
-    prompt = f"""You are a creative strategist for e-commerce product photography.
-
-Your role: Balance data-driven decisions with creative brand differentiation.
-
-BRAND IDENTITY:
-{brand_identity}
-
-PRODUCT:
-{json.dumps(product_features, indent=2)}
-
-ML RECOMMENDATION:
-{json.dumps(settings, indent=2)}
-
-While data shows these settings perform well, consider:
-1. Does this align with our brand identity?
-2. Are we differentiating from competitors or following generic trends?
-3. Could creative alternatives create stronger brand recall?
-4. What about visual storytelling and emotional connection?
-
-Provide your perspective:
-- If ML settings align with brand, acknowledge and suggest minor enhancements
-- If they feel generic, propose creative alternatives that still consider performance
-- Balance creativity with business goals
-
-Keep your argument concise (2-3 paragraphs). Be constructive and specific.
-"""
+    prompt = build_creative_prompt(ml_prediction, product_features, brand_identity)
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=prompt
     )
 
@@ -155,77 +97,32 @@ def _run_moderator(
     Returns:
         Dict with final_image_settings and reasoning
     """
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in environment")
-
-    client = genai.Client(api_key=api_key)
-
+    client = get_gemini_client()
     ml_settings = ml_prediction['image_settings']
 
-    prompt = f"""You are a moderator synthesizing the best decision from two perspectives.
-
-PRODUCT FEATURES:
-{json.dumps(product_features, indent=2)}
-
-ML PREDICTION (Data-Driven):
-{json.dumps(ml_settings, indent=2)}
-Predicted conversion: {ml_prediction['predicted_conversion_rate']*100:.2f}%
-
-OPTIMIZER'S ARGUMENT (Data-Driven):
-{optimizer_argument}
-
-CREATIVE'S ARGUMENT (Brand Differentiation):
-{creative_argument}
-
-Your task: Build consensus and decide final image settings.
-
-Consider:
-1. Both perspectives have merit - find the balanced approach
-2. Can we keep high-performing settings while adding creative touches?
-3. Which settings are most critical for conversion vs brand differentiation?
-
-Respond with JSON in this exact format:
-{{
-  "final_image_settings": {{
-    "style": "chosen_style",
-    "lighting": "chosen_lighting",
-    "background": "chosen_background",
-    "pose": "chosen_pose",
-    "expression": "chosen_expression",
-    "angle": "chosen_angle"
-  }},
-  "reasoning": "2-3 sentence explanation of your synthesis",
-  "consensus_type": "full_agreement" | "hybrid_approach" | "creative_override"
-}}
-
-CRITICAL: Respond with ONLY valid JSON. No markdown code fences, no extra text.
-"""
+    prompt = build_moderator_prompt(
+        optimizer_argument,
+        creative_argument,
+        ml_prediction,
+        product_features
+    )
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=get_model_name(),
         contents=prompt
     )
 
-    # Parse response
-    response_text = response.text.strip()
+    consensus = parse_gemini_response(response.text)
 
-    # Remove markdown code fences if present
-    if response_text.startswith("```"):
-        lines = response_text.split("\n")
-        response_text = "\n".join(lines[1:-1])
-
-    try:
-        consensus = json.loads(response_text)
-        return consensus
-    except json.JSONDecodeError as e:
-        # Fallback: use optimizer (data-driven) choice
-        print(f"Warning: Moderator JSON parse failed ({e}). Using ML prediction.")
+    if "error" in consensus:
+        print(f"Warning: Moderator JSON parse failed. Using ML prediction.")
         return {
             "final_image_settings": ml_settings,
             "reasoning": "Defaulting to data-driven ML prediction due to consensus parsing issue.",
             "consensus_type": "fallback_to_ml"
         }
+
+    return consensus
 
 
 def multi_agent_debate(
@@ -259,11 +156,9 @@ def multi_agent_debate(
     """
     print("Starting multi-agent debate...")
 
-    # Agent 1: Data-driven optimizer
     print("  Agent 1 (Optimizer): Analyzing ML prediction...")
     optimizer_response = _run_optimizer_agent(ml_prediction)
 
-    # Agent 2: Creative differentiator
     print("  Agent 2 (Creative): Considering brand alignment...")
     creative_response = _run_creative_agent(
         ml_prediction,
@@ -271,7 +166,6 @@ def multi_agent_debate(
         brand_identity
     )
 
-    # Agent 3: Moderator
     print("  Agent 3 (Moderator): Synthesizing consensus...")
     consensus = _run_moderator(
         optimizer_response,
@@ -280,7 +174,6 @@ def multi_agent_debate(
         product_features
     )
 
-    # Build result
     result = {
         "final_image_settings": consensus["final_image_settings"],
         "reasoning": consensus["reasoning"],
@@ -299,14 +192,11 @@ def multi_agent_debate(
 
 
 if __name__ == "__main__":
-    # Load environment variables for testing
     from dotenv import load_dotenv
     load_dotenv()
 
-    # Test the debate system
     print("Testing multi-agent debate system...\n")
 
-    # Mock ML prediction
     mock_ml_prediction = {
         "image_settings": {
             "style": "urban_outdoor",
@@ -328,13 +218,11 @@ if __name__ == "__main__":
         "gender": "male"
     }
 
-    # Run debate
     result = multi_agent_debate(
         mock_ml_prediction,
         mock_product_features
     )
 
-    # Print results
     print("\n" + "="*60)
     print("DEBATE RESULTS")
     print("="*60)
