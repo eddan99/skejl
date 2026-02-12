@@ -1,18 +1,6 @@
-"""
-Photography Scenario Generator
-
-Converts final image_settings from multi-agent debate into detailed
-photography_scenario JSON for image generation.
-
-Takes simple settings (style, lighting, background, pose, expression, angle)
-and generates comprehensive scenario matching the existing format.
-"""
-
 import json
 from typing import Dict
 
-
-# Mapping templates for different combinations
 STYLE_DESCRIPTIONS = {
     "urban_outdoor": {
         "setting": "urban outdoor environment with street photography aesthetic",
@@ -94,21 +82,10 @@ ANGLE_TEMPLATES = {
     "back": "back angle showing rear details"
 }
 
-
 def generate_photography_scenario(
     image_settings: Dict[str, str],
     product_features: Dict[str, str]
 ) -> Dict:
-    """
-    Generate detailed photography scenario from image settings.
-
-    Args:
-        image_settings: Dict with style, lighting, background, pose, expression, angle
-        product_features: Dict with garment_type, color, fit, gender
-
-    Returns:
-        Detailed photography_scenario dict
-    """
     style = image_settings['style']
     lighting = image_settings['lighting']
     background = image_settings['background']
@@ -116,20 +93,17 @@ def generate_photography_scenario(
     expression = image_settings['expression']
     angle = image_settings['angle']
 
-    # Get style description
     style_desc = STYLE_DESCRIPTIONS.get(style, {
         "setting": f"{style} environment",
         "atmosphere": "authentic, engaging",
         "camera_style": "professional photography"
     })
 
-    # Build subject description
     garment_type = product_features.get('garment_type', 'garment')
     color = product_features.get('color', 'colored')
     fit = product_features.get('fit', 'regular fit')
     gender = product_features.get('gender', 'person')
 
-    # Gender mapping for description
     gender_map = {
         'male': 'man',
         'female': 'woman',
@@ -147,7 +121,6 @@ def generate_photography_scenario(
         f"in a {style_desc['setting']}"
     )
 
-    # Build scenario
     scenario = {
         "rule": (
             "Always select a lively, believable real-world situation. "
@@ -208,12 +181,9 @@ def generate_photography_scenario(
             }
         }
     }
-
     return scenario
 
-
 if __name__ == "__main__":
-    # Test scenario generation
     print("Testing scenario generator...\n")
 
     test_settings = {

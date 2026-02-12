@@ -4,10 +4,8 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Laddar .env (GEMINI_API_KEY) innan något annat
 load_dotenv()
 
-# Lägger projektrooten i path så att "from logic..." och "from tools..." funkar
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -20,35 +18,21 @@ from tools.image_gen_tool import generate_product_image, generate_variant
 from tools.validation import validate_generated_image, validate_generated_variant
 from tools.shopify_tool import upload_product_to_shopify
 from tools.image_utils import crop_to_4_5_ratio
-from tools.ml_predictor import predict_image_settings
-from tools.scenario_generator import generate_photography_scenario
+from tools.ml.ml_predictor import predict_image_settings
+from tools.ml.scenario_generator import generate_photography_scenario
 from logic.agent import multi_agent_debate
 import os
 
 INPUT_DIR = PROJECT_ROOT / "data" / "input"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output"
 
-
 def find_all_product_images(base_image_path: Path) -> list:
-    """
-    Hittar alla bilder för en produkt.
+    stem = base_image_path.stem
+    parent = base_image_path.parent  
+    ext = base_image_path.suffix  
 
-    Namnkonvention:
-      - Huvudbild: honda.jpg
-      - Baksida: honda_back.jpg
-      - Sidovy: honda_side.jpg
+    found_images = [str(base_image_path)]
 
-    Exempel:
-      - Input: data/input/honda.jpg
-      - Output: [data/input/honda.jpg, data/input/honda_back.jpg, data/input/honda_side.jpg]
-    """
-    stem = base_image_path.stem  # "honda"
-    parent = base_image_path.parent  # data/input/
-    ext = base_image_path.suffix  # ".jpg"
-
-    found_images = [str(base_image_path)]  # Lägg alltid till huvudbilden först
-
-    # Kolla om det finns back/side bilder
     for variant in ["_back", "_side"]:
         variant_path = parent / f"{stem}{variant}{ext}"
         if variant_path.exists():
@@ -58,33 +42,25 @@ def find_all_product_images(base_image_path: Path) -> list:
 
 
 def main():
-    # Check if ML prediction is enabled
     use_ml = os.getenv("USE_ML_PREDICTION", "false").lower() == "true"
 
     if use_ml:
         print("ML-DRIVEN MODE ENABLED")
-        print("Flow: Extract features → ML prediction → Multi-agent debate → Generate scenario → Generate description\n")
     else:
-        print("LEGACY MODE (Direct Gemini analysis)")
-        print("Flow: Gemini generates scenario directly\n")
+        print("LEGACY MODE")
+        
+    all_images = sorted([f for f in INPUT_DIR.iterdir() if f.suffix in ['.png', '.jpg']])
 
-    # Hitta alla bilder i data/input/
-    all_images = sorted(INPUT_DIR.glob("*.png")) + sorted(INPUT_DIR.glob("*.jpg"))
-
-    # Filtrera bort variant-bilder (_back, _side) - de ska bara användas för validering
     images = [img for img in all_images if not ("_back" in img.stem or "_side" in img.stem)]
 
     if not images:
-        print("Inga huvudbilder hittades i data/input/")
+        print("No images found in data/input/")
         return
 
     for i, image_path in enumerate(images):
-        print(f"\n{'='*60}")
         print(f"Processing: {image_path.name}")
-        print(f"{'='*60}")
 
         if use_ml:
-            # ML-DRIVEN FLOW
             print("\n[1/5] Extracting product features...")
             features = extract_product_features(str(image_path))
             print(f"  Garment: {features.get('garment_type')} ({features.get('color')}, {features.get('fit')})")
@@ -111,21 +87,20 @@ def main():
             print(f"  Final settings: {debate_result['final_image_settings']['style']}, {debate_result['final_image_settings']['lighting']}")
             time.sleep(3)
 
-            print("\n[4/5] Generating photography scenario...")
+            print("\n[4/5] Generating photography scenario")
             photography_scenario = generate_photography_scenario(
                 debate_result['final_image_settings'],
                 features
             )
-            print(f"  Scenario generated")
+            print("Scenario generated")
 
-            print("\n[5/5] Generating product description...")
+            print("\n[5/5] Generating product description")
             description = generate_product_description(
                 features,
                 photography_scenario
             )
             print(f"  Description: {description[:100]}...")
-
-            # Build result dict
+            
             result = {
                 **features,
                 "photography_scenario": photography_scenario,
@@ -139,184 +114,148 @@ def main():
             }
 
         else:
-            # LEGACY FLOW (Direct Gemini analysis)
             print("\n[Gemini Analysis]")
             result = analyze_product_image(str(image_path))
             print(f"  Garment: {result.get('garment_type')} ({result.get('color')}, {result.get('fit')})")
 
-        # Printa resultat
-        print(f"\n{'='*60}")
         print("ANALYSIS RESULT:")
-        print(f"{'='*60}")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
-        # Spara analysis till data/output/
         OUTPUT_DIR.mkdir(exist_ok=True)
         output_file = OUTPUT_DIR / f"{image_path.stem}_analysis.json"
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         print(f"\nSaved: {output_file.name}")
 
-        # Paus mellan Gemini-anrop för att undvika rate limit
         time.sleep(3)
 
-        # Steg 2: Generera och validera produktbild (max 2 försök)
-        print(f"\n--- Genererar bild: {image_path.name} ---")
+        print(f"Generating image: {image_path.name}")
 
         max_attempts = 2
         final_image_bytes = None
 
         for attempt in range(1, max_attempts + 1):
-            print(f"  [Försök {attempt}/{max_attempts}]")
+            print(f"Trials {attempt}/{max_attempts}")
 
-            # Generera bild
             image_bytes, gen_log = generate_product_image(str(image_path), result)
 
-            # Printa genererings-log
             for entry in gen_log:
                 print(f"  [{entry}]")
 
-            # Om generering misslyckades (blockerad/fel)
             if not image_bytes:
-                print(f"  [Generering misslyckades på försök {attempt}]")
+                print(f"  Generation failed at {attempt}]")
                 if attempt < max_attempts:
-                    time.sleep(3)  # Vänta innan nästa försök
+                    time.sleep(3)
                 continue
 
-            # Croppa till 4:5 format
-            print(f"  [Croppar till 4:5 format...]")
             image_bytes = crop_to_4_5_ratio(image_bytes)
-
-            # Paus innan validering
+            
             time.sleep(3)
 
-            # Validera bilden
-            print(f"  [Validerar bild...]")
+            print("Validating image")
             is_valid, validation_report = validate_generated_image(
                 str(image_path),
                 image_bytes,
                 result
             )
-
-            # Printa valideringsresultat
-            print(f"  [Validering: {'GODKÄND' if is_valid else 'UNDERKÄND'}]")
+            
+            print(f"Validering: {'Approved' if is_valid else 'Denied'}")
             report_lines = validation_report.split('\n')
-            for line in report_lines[1:]:  # Skippa första raden (APPROVED/REJECTED)
+            for line in report_lines[1:]:
                 if line.strip():
                     print(f"  [{line.strip()}]")
 
-            # Om bilden är godkänd - spara och avsluta
             if is_valid:
                 final_image_bytes = image_bytes
-                print(f"  [Bild godkänd på försök {attempt}]")
+                print(f"Image approved on attempt {attempt}")
                 break
             else:
-                print(f"  [Bild underkänd på försök {attempt}]")
+                print(f"Image denied on attempt {attempt}")
                 if attempt < max_attempts:
-                    print(f"  [Försöker igen...]")
+                    print("Trying again")
                     time.sleep(3)
 
-        # Spara eller hoppa över
         if final_image_bytes:
             generated_image_path = OUTPUT_DIR / f"{image_path.stem}_generated.jpg"
             with open(generated_image_path, "wb") as f:
                 f.write(final_image_bytes)
-            print(f"Sparad: {generated_image_path.name}")
+            print(f"Saved: {generated_image_path.name}")
 
-            # Steg 3: Generera och validera varianter (side och back)
-            # Hitta alla originalbilder först (behövs för både generering och validering)
             original_images = find_all_product_images(image_path)
 
             for variant_angle in ["side", "back"]:
-                print(f"\n--- Genererar {variant_angle}-variant: {image_path.name} ---")
+                print(f"Generating {variant_angle}-variant: {image_path.name}")
 
                 max_variant_attempts = 2
                 final_variant_bytes = None
 
                 for attempt in range(1, max_variant_attempts + 1):
-                    print(f"  [Försök {attempt}/{max_variant_attempts}]")
+                    print(f"Attempt {attempt}/{max_variant_attempts}")
 
-                    time.sleep(3)  # Paus innan variant-generering
+                    time.sleep(3)
 
-                    # Generera variant med originalbilder som referens
                     variant_bytes, variant_log = generate_variant(final_image_bytes, variant_angle, original_images)
 
-                    # Printa variant-log
                     for entry in variant_log:
                         print(f"  [{entry}]")
 
-                    # Om generering misslyckades
                     if not variant_bytes:
-                        print(f"  [Generering av {variant_angle}-variant misslyckades på försök {attempt}]")
+                        print(f"Generation of {variant_angle}variant failed on attempt {attempt}")
                         if attempt < max_variant_attempts:
                             time.sleep(3)
                         continue
 
-                    # Croppa till 4:5 format
-                    print(f"  [Croppar {variant_angle}-variant till 4:5 format...]")
                     variant_bytes = crop_to_4_5_ratio(variant_bytes)
 
-                    # Paus innan validering
                     time.sleep(3)
 
-                    # Validera mot samma originalbilder som användes för generering
-                    print(f"  [Validerar {variant_angle}-variant mot {len(original_images)} originalbild(er)...]")
+                    print(f"Validating {variant_angle}-variant against {len(original_images)} original image(s)")
 
-                    # Validera varianten
                     is_valid, validation_report = validate_generated_variant(
                         original_images,
                         variant_bytes,
                         result,
                         variant_angle
                     )
-
-                    # Printa valideringsresultat
-                    print(f"  [Validering: {'GODKÄND' if is_valid else 'UNDERKÄND'}]")
+                    print(f"Validation: {'APPROVED' if is_valid else 'DENIED'}")
                     report_lines = validation_report.split('\n')
-                    for line in report_lines[1:]:  # Skippa första raden (APPROVED/REJECTED)
+                    for line in report_lines[1:]:
                         if line.strip():
                             print(f"  [{line.strip()}]")
 
-                    # Om varianten är godkänd - spara och avsluta
                     if is_valid:
                         final_variant_bytes = variant_bytes
-                        print(f"  [{variant_angle.capitalize()}-variant godkänd på försök {attempt}]")
+                        print(f"{variant_angle.capitalize()}-variant approved on attempt {attempt}")
                         break
                     else:
-                        print(f"  [{variant_angle.capitalize()}-variant underkänd på försök {attempt}]")
+                        print(f"  [{variant_angle.capitalize()}-variant denied on attempt {attempt}]")
                         if attempt < max_variant_attempts:
-                            print(f"  [Försöker igen...]")
+                            print("Trying again")
                             time.sleep(3)
 
-                # Spara variant om vi lyckades få en godkänd
                 if final_variant_bytes:
                     variant_path = OUTPUT_DIR / f"{image_path.stem}_generated_{variant_angle}.jpg"
                     with open(variant_path, "wb") as f:
                         f.write(final_variant_bytes)
-                    print(f"Sparad: {variant_path.name}")
+                    print(f"Saved: {variant_path.name}")
                 else:
-                    print(f"  Hoppar över {variant_angle}-variant — kunde inte generera godkänd efter {max_variant_attempts} försök")
+                    print(f"Skipping {variant_angle}variant. could not generate approved variant after {max_variant_attempts} attempts")
 
-            # Steg 4: Ladda upp till Shopify (om aktiverat)
             if os.getenv("UPLOAD_TO_SHOPIFY", "false").lower() == "true":
                 time.sleep(2)
-                print(f"\n--- Laddar upp till Shopify: {image_path.name} ---")
+                print(f"Uploading {image_path.name} to Shopify")
 
-                # Samla alla genererade bilder som finns
                 generated_images = []
 
-                # Huvudbild (front)
                 main_img = OUTPUT_DIR / f"{image_path.stem}_generated.jpg"
                 if main_img.exists():
                     generated_images.append(str(main_img))
 
-                # Varianter (side, back)
                 for variant in ["side", "back"]:
                     variant_img = OUTPUT_DIR / f"{image_path.stem}_generated_{variant}.jpg"
                     if variant_img.exists():
                         generated_images.append(str(variant_img))
 
-                # Ladda upp om vi har minst huvudbilden
                 if generated_images:
                     try:
                         product_id = upload_product_to_shopify(
@@ -326,23 +265,20 @@ def main():
                         )
 
                         if product_id:
-                            print(f"✅ Produkt uppladdad till Shopify! (ID: {product_id})")
+                            print(f"Product uploaded to Shopify with ID: {product_id}")
                         else:
-                            print(f"⚠️  Kunde inte ladda upp till Shopify")
-
+                            print("Could not upload product to Shopify")
                     except Exception as e:
-                        print(f"❌ Shopify upload fel: {e}")
+                        print(f"Shopify upload error: {e}")
                 else:
-                    print(f"⚠️  Inga genererade bilder att ladda upp")
+                    print(f"No generated images to upload for {image_path.name}")
 
         else:
-            print(f"  Hoppar över {image_path.name} — kunde inte generera godkänd bild efter {max_attempts} försök")
+            print(f"Skipping {image_path.name} — Could not generate image after {max_attempts} attempts")
 
-        # Paus mellan produkter för att undvika rate limit
-        if i < len(images) - 1:  # Inte efter sista bilden
+        if i < len(images) - 1:
             time.sleep(5)
-            print(f"[Väntar 5s innan nästa produkt för att undvika rate limit...]")
-
+            print("Waiting 5 seconds to avoid rate limit.")
 
 if __name__ == "__main__":
     main()
