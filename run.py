@@ -11,11 +11,18 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from tools.vision_tool import analyze_product_image
+from tools.vision_tool import (
+    analyze_product_image,
+    extract_product_features,
+    generate_product_description
+)
 from tools.image_gen_tool import generate_product_image, generate_variant
 from tools.validation import validate_generated_image, validate_generated_variant
 from tools.shopify_tool import upload_product_to_shopify
 from tools.image_utils import crop_to_4_5_ratio
+from tools.ml_predictor import predict_image_settings
+from tools.scenario_generator import generate_photography_scenario
+from logic.agent import multi_agent_debate
 import os
 
 INPUT_DIR = PROJECT_ROOT / "data" / "input"
@@ -51,6 +58,16 @@ def find_all_product_images(base_image_path: Path) -> list:
 
 
 def main():
+    # Check if ML prediction is enabled
+    use_ml = os.getenv("USE_ML_PREDICTION", "false").lower() == "true"
+
+    if use_ml:
+        print("ML-DRIVEN MODE ENABLED")
+        print("Flow: Extract features → ML prediction → Multi-agent debate → Generate scenario → Generate description\n")
+    else:
+        print("LEGACY MODE (Direct Gemini analysis)")
+        print("Flow: Gemini generates scenario directly\n")
+
     # Hitta alla bilder i data/input/
     all_images = sorted(INPUT_DIR.glob("*.png")) + sorted(INPUT_DIR.glob("*.jpg"))
 
@@ -62,11 +79,75 @@ def main():
         return
 
     for i, image_path in enumerate(images):
-        print(f"\n--- Analyserar: {image_path.name} ---")
+        print(f"\n{'='*60}")
+        print(f"Processing: {image_path.name}")
+        print(f"{'='*60}")
 
-        result = analyze_product_image(str(image_path))
+        if use_ml:
+            # ML-DRIVEN FLOW
+            print("\n[1/5] Extracting product features...")
+            features = extract_product_features(str(image_path))
+            print(f"  Garment: {features.get('garment_type')} ({features.get('color')}, {features.get('fit')})")
+            print(f"  Gender: {features.get('gender')}")
+            time.sleep(3)
+
+            print("\n[2/5] ML Prediction...")
+            ml_prediction = predict_image_settings(
+                features['garment_type'],
+                features['color'],
+                features['fit'],
+                features['gender']
+            )
+            print(f"  Predicted conversion: {ml_prediction['predicted_conversion_rate']*100:.2f}%")
+            print(f"  Settings: {ml_prediction['image_settings']['style']}, {ml_prediction['image_settings']['lighting']}")
+            time.sleep(3)
+
+            print("\n[3/5] Multi-agent debate...")
+            debate_result = multi_agent_debate(
+                ml_prediction,
+                features
+            )
+            print(f"  Consensus: {debate_result['consensus_type']}")
+            print(f"  Final settings: {debate_result['final_image_settings']['style']}, {debate_result['final_image_settings']['lighting']}")
+            time.sleep(3)
+
+            print("\n[4/5] Generating photography scenario...")
+            photography_scenario = generate_photography_scenario(
+                debate_result['final_image_settings'],
+                features
+            )
+            print(f"  Scenario generated")
+
+            print("\n[5/5] Generating product description...")
+            description = generate_product_description(
+                features,
+                photography_scenario
+            )
+            print(f"  Description: {description[:100]}...")
+
+            # Build result dict
+            result = {
+                **features,
+                "photography_scenario": photography_scenario,
+                "description": description,
+                "ml_metadata": {
+                    "ml_prediction": ml_prediction,
+                    "debate_log": debate_result['debate_log'],
+                    "final_reasoning": debate_result['reasoning'],
+                    "consensus_type": debate_result['consensus_type']
+                }
+            }
+
+        else:
+            # LEGACY FLOW (Direct Gemini analysis)
+            print("\n[Gemini Analysis]")
+            result = analyze_product_image(str(image_path))
+            print(f"  Garment: {result.get('garment_type')} ({result.get('color')}, {result.get('fit')})")
 
         # Printa resultat
+        print(f"\n{'='*60}")
+        print("ANALYSIS RESULT:")
+        print(f"{'='*60}")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
         # Spara analysis till data/output/
@@ -74,7 +155,7 @@ def main():
         output_file = OUTPUT_DIR / f"{image_path.stem}_analysis.json"
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
-        print(f"Sparad: {output_file.name}")
+        print(f"\nSaved: {output_file.name}")
 
         # Paus mellan Gemini-anrop för att undvika rate limit
         time.sleep(3)

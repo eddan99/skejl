@@ -261,3 +261,71 @@ The JSON must contain these where the "photography_scenario" key is instructions
 }}
 """
     return prompt
+
+
+def build_feature_extraction_prompt(product_metadata: dict) -> str:
+    """
+    Bygger prompt för att extrahera produkt-features från bild (UTAN photography_scenario).
+    Används i ML-driven flow där scenario genereras senare.
+    """
+    metadata_json = json.dumps(product_metadata, indent=2, ensure_ascii=False)
+
+    prompt = f"""You are a fashion product analyst.
+
+You are given a product image and metadata from the supplier:
+
+{metadata_json}
+
+Analyze the image and extract product features. Return ONLY a valid JSON object — no extra text, no markdown, no explanations.
+
+The JSON must contain:
+
+{{
+  "image": "{product_metadata['image']}",
+  "art_nr": "{product_metadata.get('art_nr', '')}",
+  "color": "exact color from metadata: {product_metadata.get('color', '')}",
+  "fit": "exact fit from metadata: {product_metadata.get('fit', '')}",
+  "composition": "convert composition dict to string, e.g. 'Shell: 60% Cotton, 40% Polyester'",
+  "gender": "{product_metadata.get('gender', '')}",
+  "garment_type": "identify garment type from image (e.g. hoodie, t-shirt, jacket, jeans, zip-up hoodie)",
+  "title": "a catchy product title that would make you want to click on the product"
+}}
+
+IMPORTANT: Do NOT generate a photography_scenario or description. Only extract the features above.
+"""
+    return prompt
+
+
+def build_description_prompt(
+    product_features: dict,
+    photography_scenario: dict,
+    brand_identity: str = None
+) -> str:
+    """
+    Bygger prompt för att generera produktbeskrivning baserat på
+    features och final photography scenario.
+    """
+    if brand_identity is None:
+        brand_identity = DEFAULT_BRAND_IDENTITY
+
+    features_json = json.dumps(product_features, indent=2, ensure_ascii=False)
+    scenario_summary = f"{photography_scenario.get('background', {}).get('setting', 'dynamic environment')}"
+
+    prompt = f"""You are a fashion product copywriter.
+
+Product features:
+{features_json}
+
+Photography scenario:
+The product will be photographed in: {scenario_summary}
+
+Brand identity:
+{brand_identity}
+
+Write a complete product description (3-5 sentences) in the tone of the brand identity.
+Be specific about the product's color, material, fit, and style.
+Match the description to the photography scenario's atmosphere.
+
+Return ONLY the description text. No JSON, no markdown, no extra formatting.
+"""
+    return prompt

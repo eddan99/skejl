@@ -4,7 +4,12 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-from logic.prompts import build_analysis_prompt
+from logic.prompts import (
+    build_analysis_prompt,
+    build_feature_extraction_prompt,
+    build_description_prompt
+)
+from tools.taxonomy import normalize_product_features
 
 # Var finns products.json? (i data/input/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -113,3 +118,104 @@ def analyze_product_image(image_path: str, brand_identity: str = None) -> dict:
 
     # STEG 7: Gör om Geminis textsvar till en Python-dict
     return parse_gemini_response(response.text)
+
+
+def extract_product_features(image_path: str) -> dict:
+    """
+    NY FUNKTION för ML-driven flow: Extraherar produkt-features från bild.
+
+    Skillnad mot analyze_product_image():
+    - Genererar INTE photography_scenario (det görs senare av ML + debate)
+    - Genererar INTE description (görs senare med generate_product_description)
+    - Normaliserar features med taxonomy.py för konsistens
+
+    Returnerar:
+        Dict med: image, art_nr, color, fit, composition, gender, garment_type, title
+    """
+    # Hämta API-nyckel
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY saknas i .env")
+
+    # Skapa Gemini-klient
+    gemini_client = genai.Client(api_key=api_key)
+
+    # Läs bildfilen
+    with open(image_path, "rb") as file:
+        image_raw_data = file.read()
+
+    # Bestäm bildtyp
+    if image_path.endswith(".png"):
+        image_type = "image/png"
+    else:
+        image_type = "image/jpeg"
+
+    # Hämta produktmetadata
+    product_metadata = load_product_data(image_path)
+
+    # Bygg feature extraction prompt (UTAN photography_scenario)
+    prompt_text = build_feature_extraction_prompt(product_metadata)
+
+    # Skicka till Gemini
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part(inline_data=types.Blob(mime_type=image_type, data=image_raw_data)),
+            types.Part(text=prompt_text)
+        ]
+    )
+
+    # Parse svar
+    features = parse_gemini_response(response.text)
+
+    # Normalisera features för konsistens med conversion_db
+    try:
+        features = normalize_product_features(features)
+    except ValueError as e:
+        print(f"Warning: Normalization failed: {e}")
+        # Continue without normalization if it fails
+
+    return features
+
+
+def generate_product_description(
+    product_features: dict,
+    photography_scenario: dict,
+    brand_identity: str = None
+) -> str:
+    """
+    NY FUNKTION för ML-driven flow: Genererar produktbeskrivning.
+
+    Anropas EFTER att photography_scenario har finaliserats av ML + debate.
+
+    Parametrar:
+        product_features: Features från extract_product_features()
+        photography_scenario: Final scenario från scenario_generator
+        brand_identity: Valfri varumärkesidentitet
+
+    Returnerar:
+        Produktbeskrivning som string
+    """
+    # Hämta API-nyckel
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY saknas i .env")
+
+    # Skapa Gemini-klient
+    gemini_client = genai.Client(api_key=api_key)
+
+    # Bygg description prompt
+    prompt_text = build_description_prompt(
+        product_features,
+        photography_scenario,
+        brand_identity
+    )
+
+    # Skicka till Gemini (text-only, ingen bild behövs)
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt_text
+    )
+
+    # Returnera beskrivningen direkt som text
+    return response.text.strip()

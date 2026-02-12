@@ -1,0 +1,14 @@
+{
+  "training_size": 800,
+  "test_size": 200,
+  "accuracies": {
+    "style": 0.13,
+    "lighting": 0.205,
+    "background": 0.17,
+    "pose": 0.11,
+    "expression": 0.175,
+    "angle": 0.235
+  },
+  "avg_accuracy": 0.1708333333333333,
+  "min_impressions": 1000
+}
