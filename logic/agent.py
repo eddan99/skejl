@@ -11,10 +11,10 @@ Single-round debate: Optimizer → Creative → Moderator → Final decision
 
 import json
 from typing import Dict
-
 from config.settings import settings
 from tools.gemini_client import get_gemini_client, get_model_name
 from tools.json_utils import parse_gemini_response
+from tools.taxonomy import validate_image_settings
 from tools.prompts import (
     build_optimizer_prompt,
     build_creative_prompt,
@@ -119,6 +119,16 @@ def _run_moderator(
         return {
             "final_image_settings": ml_settings,
             "reasoning": "Defaulting to data-driven ML prediction due to consensus parsing issue.",
+            "consensus_type": "fallback_to_ml"
+        }
+
+    try:
+        validate_image_settings(consensus["final_image_settings"])
+    except ValueError as e:
+        print(f"Warning: Moderator returned invalid settings ({e}). Using ML prediction.")
+        return {
+            "final_image_settings": ml_settings,
+            "reasoning": "Defaulting to data-driven ML prediction due to invalid consensus settings.",
             "consensus_type": "fallback_to_ml"
         }
 

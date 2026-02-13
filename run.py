@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Setup path for imports
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -22,7 +21,7 @@ from tools.validation import validate_generated_image, validate_generated_varian
 from tools.shopify_tool import upload_product_to_shopify
 from tools.image_utils import crop_to_4_5_ratio
 from tools.ml.ml_predictor import predict_image_settings
-from tools.ml.scenario_generator import generate_photography_scenario
+from tools.scenario_generator import generate_photography_scenario
 from logic.agent import multi_agent_debate
 
 def find_all_product_images(base_image_path: Path) -> list:
@@ -41,7 +40,6 @@ def find_all_product_images(base_image_path: Path) -> list:
 
 
 def main():
-    # Ensure output directories exist
     ensure_directories()
 
     use_ml = settings.USE_ML_PREDICTION

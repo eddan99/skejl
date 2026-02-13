@@ -35,6 +35,10 @@ The reference image shows the EXACT garment. Copy it with 100% accuracy:
 - Do NOT invent or modify the garment
 - No real celebrities, no real brand logos
 
+PEOPLE:
+- The scene must contain ONLY the main subject (the person wearing the garment)
+- Do NOT include any other people, bystanders or figures anywhere in the image — not in the background, not in the distance, not partially visible at the edges
+
 PHOTO SPECIFICATION (JSON format):
 {scenario_json}
 
@@ -79,11 +83,16 @@ The color is too dark/light compared to the original.
     return prompt
 
 
-def build_variant_prompt(view_angle: str) -> str:
+def build_variant_prompt(view_angle: str, num_source_images: int = 1) -> str:
     """
     Bygger prompt för att generera en variant av en bild (side eller back).
     """
     angle_description = "from the side" if view_angle == "side" else "from behind"
+
+    if num_source_images == 1:
+        back_print_note = "Only ONE reference image was provided (front view only). Assume there is NO print, graphic or logo on the back or sides of the garment unless it is clearly visible wrapping around from the front."
+    else:
+        back_print_note = "Use the original garment images to determine if there are prints or graphics on the back or sides."
 
     prompt = f"""TASK: Generate a photorealistic fashion PHOTOGRAPH.
 
@@ -97,17 +106,17 @@ YOUR TASK: Generate THE EXACT SAME SCENE but photographed {angle_description}.
 image_format = "4:5"
 
 REQUIREMENTS:
-- Use the ORIGINAL GARMENT IMAGES to see how the {angle_description} of the garment actually looks (color, texture, graphics, fit)
-- Use the GENERATED SCENE IMAGE for: person (appearance, hair, age), environment, lighting, pose
-- SAME person as in the generated scene
-- SAME environment and lighting as in the generated scene
-- SAME pose and body position as in the generated scene
-- EXACT garment details {angle_description} as shown in the original garment images
+- SAME person, environment, lighting and pose as in the generated scene
 - ONLY DIFFERENCE: Camera angle is now {angle_description}
+- Match garment color, texture and fit exactly
 
-CRITICAL: If original images show how the garment looks {angle_description}, replicate those exact details (prints, logos, texture, color).
+GARMENT BACK/SIDE:
+- {back_print_note}
 
-Generate a photograph that looks like you walked around the person from the scene and took another shot {angle_description}."""
+PEOPLE:
+- The scene must contain ONLY the main subject — no other people anywhere in the image.
+
+Generate a photograph that looks like you walked around the person and took another shot {angle_description}."""
 
     return prompt
 
@@ -439,6 +448,14 @@ Consider:
 2. Can we keep high-performing settings while adding creative touches?
 3. Which settings are most critical for conversion vs brand differentiation?
 
+VALID VALUES — you MUST only use these exact strings:
+- style: "urban_outdoor", "studio_minimal", "lifestyle_indoor", "casual_lifestyle", "streetwear", "lifestyle_outdoor"
+- lighting: "golden_hour", "studio", "natural", "overcast", "dramatic"
+- background: "studio_white", "studio_grey", "neutral_wall", "urban_street", "graffiti_wall", "nature_outdoor", "park", "busy_pattern"
+- pose: "walking", "standing", "action", "sitting", "dynamic", "casual"
+- expression: "confident", "serious", "smiling", "neutral", "focused"
+- angle: "front", "side", "3/4", "back"
+
 Respond with JSON in this exact format:
 {{
   "final_image_settings": {{
@@ -453,6 +470,6 @@ Respond with JSON in this exact format:
   "consensus_type": "full_agreement" | "hybrid_approach" | "creative_override"
 }}
 
-CRITICAL: Respond with ONLY valid JSON. No markdown code fences, no extra text.
+CRITICAL: Respond with ONLY valid JSON. No markdown code fences, no extra text. Only use the exact valid values listed above.
 """
     return prompt

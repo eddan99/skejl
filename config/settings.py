@@ -1,6 +1,3 @@
-"""
-Centralized configuration for the entire application.
-"""
 import os
 from typing import Optional
 

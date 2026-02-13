@@ -52,7 +52,8 @@ def generate_variant(approved_image_raw_data: bytes, view_angle: str, original_i
 
     decision_log = []
 
-    prompt_text = build_variant_prompt(view_angle)
+    num_source_images = len(original_image_paths) if original_image_paths else 1
+    prompt_text = build_variant_prompt(view_angle, num_source_images)
 
     if original_image_paths and len(original_image_paths) > 1:
         decision_log.append(f"Decision: Generating {view_angle}-variant with {len(original_image_paths)} original images as reference")

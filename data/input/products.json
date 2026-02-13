@@ -1,13 +1,13 @@
 [
   { 
-    "image": "yourturn.jpg",
-    "title": "Hoodie Relaxed Fit",
+    "image": "jacket.jpg",
+    "title": "Coated jacket",
     "art_nr": "1313-9211",
-    "color": "Dark grey",
-    "fit": "Loose fit",
+    "color": "Dark brown",
+    "fit": "Regular fit",
     "composition": {
-      "Shell": "100% Cotton"
+      "Shell": "100% skin"
     },
-    "gender": "male"
+    "gender": "female"
   }
 ]

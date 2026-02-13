@@ -16,11 +16,10 @@ GENDERS = ['female', 'male', 'unisex']
 
 # Image Settings Taxonomies
 IMAGE_STYLES = [
-    'action_sports',
-    'artistic',
+    'casual_lifestyle',
     'lifestyle_indoor',
-    'skate_urban',
-    'street_style',
+    'lifestyle_outdoor',
+    'streetwear',
     'studio_minimal',
     'urban_outdoor'
 ]
@@ -30,16 +29,16 @@ LIGHTING_TYPES = [
     'golden_hour',
     'natural',
     'overcast',
-    'soft_diffused',
     'studio'
 ]
 
 BACKGROUNDS = [
-    'brick_wall',
+    'busy_pattern',
     'graffiti_wall',
-    'indoor_minimal',
-    'nature',
-    'skatepark',
+    'nature_outdoor',
+    'neutral_wall',
+    'park',
+    'studio_grey',
     'studio_white',
     'urban_street'
 ]
