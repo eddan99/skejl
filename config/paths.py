@@ -8,6 +8,8 @@ OUTPUT_DIR = DATA_DIR / "output"
 MODELS_DIR = DATA_DIR / "models"
 
 PRODUCTS_JSON = INPUT_DIR / "products.json"
+CTR_DATASET_PATH = INPUT_DIR / "ctr_dataset.json"
+RF_CTR_MODEL_PATH = MODELS_DIR / "rf_ctr_model.pkl"
 CONVERSION_DB_JSON = DATA_DIR / "conversion_db.json"
 
 RF_MODEL_PATH = MODELS_DIR / "rf_model.pkl"

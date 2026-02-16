@@ -9,8 +9,71 @@ from typing import Dict, Any
 
 
 # Product Feature Taxonomies
-GARMENT_TYPES = ['hoodie', 'jacket', 'jeans', 't-shirt', 'zip-up hoodie']
-COLORS = ['black', 'colorful', 'dark', 'dark grey', 'light', 'white']
+GARMENT_TYPES = [
+    'hoodie', 'zip-up hoodie', 'sweatshirt',
+    't-shirt', 'polo',
+    'jacket', 'bomber jacket', 'coat', 'windbreaker', 'parka',
+    'jeans', 'trousers', 'shorts'
+]
+
+_COLOR_ALIASES: dict[str, str] = {
+    'brown': 'dark brown',
+    'dark brown': 'dark brown',
+    'grey': 'dark grey',
+    'gray': 'dark grey',
+    'dark gray': 'dark grey',
+    'light gray': 'light grey',
+    'medium grey': 'dark grey',
+    'medium gray': 'dark grey',
+    'off-white': 'cream',
+    'off white': 'cream',
+    'ivory': 'cream',
+    'khaki': 'sand',
+    'tan': 'sand',
+    'camel': 'sand',
+    'dark blue': 'navy',
+    'dark green': 'forest green',
+    'dark red': 'burgundy',
+    'maroon': 'burgundy',
+    'bright': 'colorful',
+    'multicolor': 'colorful',
+    'multi': 'colorful',
+    'patterned': 'colorful',
+}
+
+_GARMENT_ALIASES: dict[str, str] = {
+    'zip hoodie': 'zip-up hoodie',
+    'zip up hoodie': 'zip-up hoodie',
+    'full zip hoodie': 'zip-up hoodie',
+    'crewneck': 'sweatshirt',
+    'crew neck': 'sweatshirt',
+    'tee': 't-shirt',
+    'tshirt': 't-shirt',
+    'dress pants': 'trousers',
+    'chinos': 'trousers',
+    'cargo pants': 'trousers',
+    'cargo shorts': 'shorts',
+    'denim': 'jeans',
+    'leather jacket': 'jacket',
+    'denim jacket': 'jacket',
+    'varsity jacket': 'jacket',
+    'fur jacket': 'jacket',
+    'fur bomber': 'bomber jacket',
+    'fur bomber jacket': 'bomber jacket',
+    'flight jacket': 'bomber jacket',
+    'rain jacket': 'windbreaker',
+    'anorak': 'windbreaker',
+    'down jacket': 'parka',
+    'winter coat': 'coat',
+    'overcoat': 'coat',
+    'trench coat': 'coat',
+}
+COLORS = [
+    'black', 'white', 'dark grey', 'light grey',
+    'dark', 'dark brown', 'navy', 'burgundy', 'olive', 'forest green',
+    'light', 'beige', 'cream', 'sand', 'light blue',
+    'colorful', 'red', 'yellow', 'orange', 'green', 'blue', 'pink', 'purple'
+]
 FITS = ['loose', 'oversized', 'regular', 'tight']
 GENDERS = ['female', 'male', 'unisex']
 
@@ -64,8 +127,8 @@ def normalize_color(raw_color: str) -> str:
         Normalized lowercase color
     """
     normalized = raw_color.lower().strip()
+    normalized = _COLOR_ALIASES.get(normalized, normalized)
 
-    # Validate against taxonomy
     if normalized not in COLORS:
         raise ValueError(
             f"Invalid color '{raw_color}'. Must be one of: {COLORS}"
@@ -116,8 +179,8 @@ def normalize_garment_type(raw_type: str) -> str:
         Normalized lowercase garment type
     """
     normalized = raw_type.lower().strip()
+    normalized = _GARMENT_ALIASES.get(normalized, normalized)
 
-    # Validate against taxonomy
     if normalized not in GARMENT_TYPES:
         raise ValueError(
             f"Invalid garment_type '{raw_type}'. Must be one of: {GARMENT_TYPES}"

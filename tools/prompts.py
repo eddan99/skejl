@@ -2,17 +2,92 @@ import json
 from config.settings import settings
 
 
+_STYLE_DIRECTIVES = {
+    "urban_outdoor":     "LOCATION: Urban outdoor street environment — buildings, pavement, city. NOT a studio.",
+    "studio_minimal":    "LOCATION: Clean indoor studio with plain backdrop. NO outdoor scenes, NO streets, NO buildings.",
+    "lifestyle_indoor":  "LOCATION: Casual indoor space — living room, café, home. NOT a studio, NOT outdoor.",
+    "casual_lifestyle":  "LOCATION: Relaxed everyday outdoor or indoor setting.",
+    "streetwear":        "LOCATION: Urban street, skatepark or city environment.",
+    "lifestyle_outdoor": "LOCATION: Outdoor lifestyle setting — park, nature, open space.",
+}
+
+_LIGHTING_DIRECTIVES = {
+    "golden_hour": "LIGHTING: Warm orange-pink golden hour sunset. Strong warm glow, long shadows, rim light on subject.",
+    "studio":      "LIGHTING: Controlled studio lighting — even, clean, no harsh shadows.",
+    "natural":     "LIGHTING: Soft natural daylight. Balanced exposure, gentle shadows.",
+    "overcast":    "LIGHTING: Soft diffused overcast sky. Flat, even lighting, minimal shadows.",
+    "dramatic":    "LIGHTING: High-contrast dramatic lighting. Strong shadows, bright highlights, dark areas.",
+}
+
+_BACKGROUND_DIRECTIVES = {
+    "studio_white":   "BACKGROUND: Pure white seamless studio backdrop. Nothing else behind the subject.",
+    "studio_grey":    "BACKGROUND: Grey studio backdrop. Clean and plain.",
+    "neutral_wall":   "BACKGROUND: Plain neutral wall. No street, no outdoor, no buildings.",
+    "urban_street":   "BACKGROUND: Urban street with buildings, road, and city infrastructure.",
+    "graffiti_wall":  "BACKGROUND: Colorful graffiti-covered brick wall.",
+    "nature_outdoor": "BACKGROUND: Natural outdoor environment — greenery, trees, grass.",
+    "park":           "BACKGROUND: Public park with grass, trees, and open space.",
+    "busy_pattern":   "BACKGROUND: Visually busy patterned background.",
+}
+
+_POSE_DIRECTIVES = {
+    "walking": "POSE: Natural walking, mid-stride, one foot forward.",
+    "standing": "POSE: Relaxed upright standing. Both feet on ground.",
+    "action":   "POSE: Dynamic action pose with movement and energy.",
+    "sitting":  "POSE: Seated, relaxed position.",
+    "dynamic":  "POSE: Dynamic pose with movement.",
+    "casual":   "POSE: Casual, relaxed, natural stance.",
+}
+
+_ANGLE_DIRECTIVES = {
+    "front": "CAMERA ANGLE: Straight-on front view.",
+    "side":  "CAMERA ANGLE: Side profile.",
+    "3/4":   "CAMERA ANGLE: Three-quarter angle.",
+    "back":  "CAMERA ANGLE: Rear view from behind.",
+}
+
+
+_GENDER_DIRECTIVES = {
+    "female": "SUBJECT: A woman. NOT a man.",
+    "male":   "SUBJECT: A man. NOT a woman.",
+    "unisex": "SUBJECT: A person (any gender).",
+}
+
+
+def _extract_hard_constraints(analysis: dict) -> str:
+    """Extract final_image_settings from result and build explicit constraint block."""
+    try:
+        s = analysis["ml_metadata"]["debate_log"]["moderator_decision"]["final_image_settings"]
+    except (KeyError, TypeError):
+        return ""
+
+    lines = []
+    if d := _GENDER_DIRECTIVES.get(analysis.get("gender", "")):
+        lines.append(d)
+    if d := _STYLE_DIRECTIVES.get(s.get("style", "")):
+        lines.append(d)
+    if d := _LIGHTING_DIRECTIVES.get(s.get("lighting", "")):
+        lines.append(d)
+    if d := _BACKGROUND_DIRECTIVES.get(s.get("background", "")):
+        lines.append(d)
+    if d := _POSE_DIRECTIVES.get(s.get("pose", "")):
+        lines.append(d)
+    if d := _ANGLE_DIRECTIVES.get(s.get("angle", "")):
+        lines.append(d)
+
+    if not lines:
+        return ""
+
+    return "MANDATORY SCENE CONSTRAINTS — follow these exactly, they override everything else:\n" + "\n".join(
+        f"{i+1}. {line}" for i, line in enumerate(lines)
+    )
+
+
 def build_image_gen_prompt(analysis: dict) -> str:
-    """
-    Bygger bildgenereringsprompt med förenklad clothing-sektion.
-    Instruerar modellen att skapa BILD baserat på JSON-spec.
-    """
     scenario = analysis.get("photography_scenario", {})
 
-    # Förenkla clothing-sektionen — ta bort detaljerade fallback_description
-    if "subject" in scenario and "clothing" in scenario["subject"]:
-        clothing = scenario["subject"]["clothing"]
-        # Behåll bara reference_instruction, ta bort fallback_description
+    if "subject" in scenario.get("example_output_structure", {}):
+        clothing = scenario["example_output_structure"]["subject"].get("clothing", {})
         clothing["top"] = {
             "instruction": "Use the EXACT garment from the reference image. Match color, texture, fit, graphics perfectly."
         }
@@ -20,11 +95,14 @@ def build_image_gen_prompt(analysis: dict) -> str:
             "instruction": "Use clothing from reference image or garments that naturally match the scenario and top garment."
         }
 
+    hard_constraints = _extract_hard_constraints(analysis)
     scenario_json = json.dumps(scenario, indent=2, ensure_ascii=False)
 
     prompt = f"""TASK: Generate a photorealistic fashion PHOTOGRAPH.
 
 IMPORTANT: You MUST return an IMAGE. DO NOT return text, JSON, or descriptions. ONLY generate a photograph.
+
+{hard_constraints}
 
 CRITICAL GARMENT INSTRUCTION:
 The reference image shows the EXACT garment. Copy it with 100% accuracy:
@@ -37,12 +115,12 @@ The reference image shows the EXACT garment. Copy it with 100% accuracy:
 
 PEOPLE:
 - The scene must contain ONLY the main subject (the person wearing the garment)
-- Do NOT include any other people, bystanders or figures anywhere in the image — not in the background, not in the distance, not partially visible at the edges
+- Do NOT include any other people, bystanders or figures anywhere in the image
 
-PHOTO SPECIFICATION (JSON format):
+DETAILED PHOTO SPECIFICATION (JSON):
 {scenario_json}
 
-Follow the JSON specification exactly to generate the photograph. The "clothing" section instructs you to use the reference-image."""
+The mandatory constraints above take priority. The JSON provides additional detail for subject, styling and composition."""
 
     return prompt
 
@@ -471,5 +549,35 @@ Respond with JSON in this exact format:
 }}
 
 CRITICAL: Respond with ONLY valid JSON. No markdown code fences, no extra text. Only use the exact valid values listed above.
+"""
+    return prompt
+
+
+def build_refinement_prompt(scenario: dict, feedback: str) -> str:
+    """
+    Sends the current photography_scenario + free-text user feedback to Gemini.
+    Asks Gemini to return an updated scenario JSON matching the same schema.
+    """
+    scenario_json = json.dumps(scenario, indent=2, ensure_ascii=False)
+
+    prompt = f"""You are a photography director refining a product shoot scenario based on client feedback.
+
+CURRENT SCENARIO:
+{scenario_json}
+
+CLIENT FEEDBACK:
+{feedback}
+
+Your task: Update the scenario JSON to reflect the feedback. Keep all unchanged fields identical.
+
+VALID VALUES — only use these exact strings:
+- style: "urban_outdoor", "studio_minimal", "lifestyle_indoor", "casual_lifestyle", "streetwear", "lifestyle_outdoor"
+- lighting: "golden_hour", "studio", "natural", "overcast", "dramatic"
+- background: "studio_white", "studio_grey", "neutral_wall", "urban_street", "graffiti_wall", "nature_outdoor", "park", "busy_pattern"
+- pose: "walking", "standing", "action", "sitting", "dynamic", "casual"
+- expression: "confident", "serious", "smiling", "neutral", "focused"
+- angle: "front", "side", "3/4", "back"
+
+Return the complete updated scenario as JSON. No markdown code fences, no extra text — only the JSON object.
 """
     return prompt

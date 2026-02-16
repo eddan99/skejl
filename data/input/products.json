@@ -1,13 +1,35 @@
 [
   { 
+    "image": "shirt.jpg",
+    "title": "shirt",
+    "art_nr": "1313-91211",
+    "color": "Blue",
+    "fit": "Regular fit",
+    "composition": {
+      "Shell": "100% cotton"
+    },
+    "gender": "male"
+  },
+  { 
     "image": "jacket.jpg",
-    "title": "Coated jacket",
+    "title": "jacket",
     "art_nr": "1313-9211",
-    "color": "Dark brown",
+    "color": "Brown",
     "fit": "Regular fit",
     "composition": {
       "Shell": "100% skin"
     },
     "gender": "female"
+  },
+    { 
+    "image": "yourturn.jpg",
+    "title": "Hoodie Relaxed Fit",
+    "art_nr": "1313-92111",
+    "color": "Grey",
+    "fit": "Regular fit",
+    "composition": {
+      "Shell": "100% cotton"
+    },
+    "gender": "male"
   }
 ]

@@ -12,17 +12,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SHOP_NAME = os.getenv("SHOPIFY_SHOP_NAME")
-ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
-API_URL = f"https://{SHOP_NAME}.myshopify.com/admin/api/2024-01"
 
-headers = {
-    "X-Shopify-Access-Token": ACCESS_TOKEN,
-    "Content-Type": "application/json"
-}
+def _get_credentials() -> tuple[str, str, str, dict]:
+    """Read Shopify credentials from env at call time (supports runtime injection)."""
+    shop_name = os.getenv("SHOPIFY_SHOP_NAME", "")
+    access_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+    api_url = f"https://{shop_name}.myshopify.com/admin/api/2024-01"
+    hdrs = {"X-Shopify-Access-Token": access_token, "Content-Type": "application/json"}
+    return shop_name, access_token, api_url, hdrs
 
 
 def create_product(title: str, description: str, sku: str, tags: list, price: str = "299.00") -> int:
+    _, _, api_url, headers = _get_credentials()
     data = {
         "product": {
             "title": title,
@@ -37,7 +38,7 @@ def create_product(title: str, description: str, sku: str, tags: list, price: st
         }
     }
     response = requests.post(
-        f"{API_URL}/products.json",
+        f"{api_url}/products.json",
         headers=headers,
         json=data
     )
@@ -50,6 +51,7 @@ def create_product(title: str, description: str, sku: str, tags: list, price: st
 
 
 def upload_image(product_id: int, image_path: str, alt_text: str):
+    _, _, api_url, headers = _get_credentials()
     with open(image_path, "rb") as f:
         image_base64 = base64.b64encode(f.read()).decode("utf-8")
 
@@ -61,7 +63,7 @@ def upload_image(product_id: int, image_path: str, alt_text: str):
     }
 
     response = requests.post(
-        f"{API_URL}/products/{product_id}/images.json",
+        f"{api_url}/products/{product_id}/images.json",
         headers=headers,
         json=data
     )
@@ -119,7 +121,8 @@ def upload_product_to_shopify(product_name: str, analysis_file: str, generated_i
         except Exception as e:
             print(f"Could not upload {filename}: {e}")
 
+    shop_name, _, _, _ = _get_credentials()
     print("Product upload complete")
-    print(f"https://{SHOP_NAME}.myshopify.com/admin/products/{product_id}\n")
+    print(f"https://{shop_name}.myshopify.com/admin/products/{product_id}\n")
 
     return product_id
