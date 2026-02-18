@@ -1,7 +1,3 @@
-"""
-Shopify Integration - Laddar upp produkter med bilder
-"""
-
 import os
 import json
 import base64
@@ -10,11 +6,12 @@ import requests
 from pathlib import Path
 from dotenv import load_dotenv
 
+_RATE_DELAY = 0.5
+
 load_dotenv()
 
 
 def _get_credentials() -> tuple[str, str, str, dict]:
-    """Read Shopify credentials from env at call time (supports runtime injection)."""
     shop_name = os.getenv("SHOPIFY_SHOP_NAME", "")
     access_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
     api_url = f"https://{shop_name}.myshopify.com/admin/api/2024-01"
@@ -42,11 +39,11 @@ def create_product(title: str, description: str, sku: str, tags: list, price: st
         headers=headers,
         json=data
     )
-    time.sleep(0.5)
+    time.sleep(_RATE_DELAY)
     response.raise_for_status()
     result = response.json()
     product_id = result["product"]["id"]
-    print(f"✓ Produkt skapad: {title} (ID: {product_id})")
+    print(f"Product created: {title} (ID: {product_id})")
     return product_id
 
 
@@ -68,7 +65,7 @@ def upload_image(product_id: int, image_path: str, alt_text: str):
         json=data
     )
 
-    time.sleep(0.5)
+    time.sleep(_RATE_DELAY)
     response.raise_for_status()
 
     print(f"Image uploaded: {alt_text}")

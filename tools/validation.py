@@ -1,6 +1,7 @@
 from google.genai import types
 
 from tools.gemini_client import get_gemini_client, get_model_name
+from tools.image_utils import mime_type
 from tools.prompts import build_validation_prompt, build_variant_validation_prompt
 
 
@@ -10,11 +11,7 @@ def validate_generated_image(original_image_path: str, generated_image_raw_data:
     with open(original_image_path, "rb") as file:
         original_image_raw_data = file.read()
 
-    if original_image_path.endswith(".png"):
-        original_image_type = "image/png"
-    else:
-        original_image_type = "image/jpeg"
-
+    original_image_type = mime_type(original_image_path)
     generated_image_type = "image/jpeg"
 
     color = analysis.get("color", "unknown color")
@@ -46,12 +43,7 @@ def validate_generated_variant(original_image_paths: list, generated_variant_raw
         with open(image_path, "rb") as file:
             original_image_raw_data = file.read()
 
-        if image_path.endswith(".png"):
-            image_type = "image/png"
-        else:
-            image_type = "image/jpeg"
-
-        original_images_data.append((original_image_raw_data, image_type))
+        original_images_data.append((original_image_raw_data, mime_type(image_path)))
 
     generated_image_type = "image/jpeg"
 
@@ -62,8 +54,8 @@ def validate_generated_variant(original_image_paths: list, generated_variant_raw
 
     contents = []
 
-    for original_data, mime_type in original_images_data:
-        contents.append(types.Part(inline_data=types.Blob(mime_type=mime_type, data=original_data)))
+    for original_data, img_type in original_images_data:
+        contents.append(types.Part(inline_data=types.Blob(mime_type=img_type, data=original_data)))
 
     contents.append(types.Part(inline_data=types.Blob(mime_type=generated_image_type, data=generated_variant_raw_data)))
 

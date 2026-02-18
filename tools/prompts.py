@@ -55,7 +55,6 @@ _GENDER_DIRECTIVES = {
 
 
 def _extract_hard_constraints(analysis: dict) -> str:
-    """Extract final_image_settings from result and build explicit constraint block."""
     try:
         s = analysis["ml_metadata"]["debate_log"]["moderator_decision"]["final_image_settings"]
     except (KeyError, TypeError):
@@ -126,9 +125,6 @@ The mandatory constraints above take priority. The JSON provides additional deta
 
 
 def build_validation_prompt(color: str, garment_type: str) -> str:
-    """
-    Bygger prompt för att validera att en genererad bild matchar originalbilden.
-    """
     prompt = f"""You are an expert at comparing clothing garments.
 
 You are given two images:
@@ -162,9 +158,6 @@ The color is too dark/light compared to the original.
 
 
 def build_variant_prompt(view_angle: str, num_source_images: int = 1) -> str:
-    """
-    Bygger prompt för att generera en variant av en bild (side eller back).
-    """
     angle_description = "from the side" if view_angle == "side" else "from behind"
 
     if num_source_images == 1:
@@ -200,9 +193,6 @@ Generate a photograph that looks like you walked around the person and took anot
 
 
 def build_variant_validation_prompt(color: str, garment_type: str, view_angle: str) -> str:
-    """
-    Bygger prompt för att validera en genererad variant (side/back) mot originalbilder.
-    """
     angle_name = "side" if view_angle == "side" else "back"
 
     prompt = f"""You are an expert at comparing clothing garments.
@@ -345,10 +335,6 @@ The JSON must contain these where the "photography_scenario" key is instructions
 
 
 def build_feature_extraction_prompt(product_metadata: dict) -> str:
-    """
-    Bygger prompt för att extrahera produkt-features från bild (UTAN photography_scenario).
-    Används i ML-driven flow där scenario genereras senare.
-    """
     metadata_json = json.dumps(product_metadata, indent=2, ensure_ascii=False)
 
     prompt = f"""You are a fashion product analyst.
@@ -385,10 +371,6 @@ def build_description_prompt(
     photography_scenario: dict,
     brand_identity: str = None
 ) -> str:
-    """
-    Bygger prompt för att generera produktbeskrivning baserat på
-    features och final photography scenario.
-    """
     if brand_identity is None:
         brand_identity = settings.DEFAULT_BRAND_IDENTITY
 
@@ -421,10 +403,6 @@ Return ONLY the description text. No JSON, no markdown, no extra formatting.
 
 
 def build_optimizer_prompt(ml_prediction: dict) -> str:
-    """
-    Bygger prompt för Optimizer Agent i multi-agent debate.
-    Advocates för ML-predicted settings baserat på data.
-    """
     settings = ml_prediction['image_settings']
     conversion = ml_prediction['predicted_conversion_rate']
     confidence = ml_prediction.get('confidence', 0)
@@ -457,10 +435,6 @@ def build_creative_prompt(
     product_features: dict,
     brand_identity: str
 ) -> str:
-    """
-    Bygger prompt för Creative Agent i multi-agent debate.
-    Proposes creative alternatives för brand differentiation.
-    """
     settings = ml_prediction['image_settings']
 
     prompt = f"""You are a creative strategist for e-commerce product photography.
@@ -498,10 +472,6 @@ def build_moderator_prompt(
     ml_prediction: dict,
     product_features: dict
 ) -> str:
-    """
-    Bygger prompt för Moderator Agent i multi-agent debate.
-    Synthesizes final decision från både perspectives.
-    """
     ml_settings = ml_prediction['image_settings']
 
     prompt = f"""You are a moderator synthesizing the best decision from two perspectives.
@@ -549,35 +519,5 @@ Respond with JSON in this exact format:
 }}
 
 CRITICAL: Respond with ONLY valid JSON. No markdown code fences, no extra text. Only use the exact valid values listed above.
-"""
-    return prompt
-
-
-def build_refinement_prompt(scenario: dict, feedback: str) -> str:
-    """
-    Sends the current photography_scenario + free-text user feedback to Gemini.
-    Asks Gemini to return an updated scenario JSON matching the same schema.
-    """
-    scenario_json = json.dumps(scenario, indent=2, ensure_ascii=False)
-
-    prompt = f"""You are a photography director refining a product shoot scenario based on client feedback.
-
-CURRENT SCENARIO:
-{scenario_json}
-
-CLIENT FEEDBACK:
-{feedback}
-
-Your task: Update the scenario JSON to reflect the feedback. Keep all unchanged fields identical.
-
-VALID VALUES — only use these exact strings:
-- style: "urban_outdoor", "studio_minimal", "lifestyle_indoor", "casual_lifestyle", "streetwear", "lifestyle_outdoor"
-- lighting: "golden_hour", "studio", "natural", "overcast", "dramatic"
-- background: "studio_white", "studio_grey", "neutral_wall", "urban_street", "graffiti_wall", "nature_outdoor", "park", "busy_pattern"
-- pose: "walking", "standing", "action", "sitting", "dynamic", "casual"
-- expression: "confident", "serious", "smiling", "neutral", "focused"
-- angle: "front", "side", "3/4", "back"
-
-Return the complete updated scenario as JSON. No markdown code fences, no extra text — only the JSON object.
 """
     return prompt

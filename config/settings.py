@@ -46,24 +46,4 @@ class Settings:
             except ValueError:
                 pass
 
-    def update_from_db(self, db_settings: dict):
-
-        if "brand_identity" in db_settings:
-            self.DEFAULT_BRAND_IDENTITY = db_settings["brand_identity"]
-
-        if "model_name" in db_settings:
-            self.GEMINI_MODEL_NAME = db_settings["model_name"]
-
-        if "use_ml_prediction" in db_settings:
-            self.USE_ML_PREDICTION = db_settings["use_ml_prediction"]
-
-        if "upload_to_shopify" in db_settings:
-            self.UPLOAD_TO_SHOPIFY = db_settings["upload_to_shopify"]
-
-        if "max_generation_attempts" in db_settings:
-            self.MAX_GENERATION_ATTEMPTS = db_settings["max_generation_attempts"]
-
-        if "max_variant_attempts" in db_settings:
-            self.MAX_VARIANT_ATTEMPTS = db_settings["max_variant_attempts"]
-
 settings = Settings()

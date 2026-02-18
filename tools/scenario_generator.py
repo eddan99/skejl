@@ -1,4 +1,3 @@
-import json
 from typing import Dict
 
 STYLE_DESCRIPTIONS = {
@@ -183,26 +182,3 @@ def generate_photography_scenario(
     }
     return scenario
 
-if __name__ == "__main__":
-    print("Testing scenario generator...\n")
-
-    test_settings = {
-        "style": "urban_outdoor",
-        "lighting": "golden_hour",
-        "background": "graffiti_wall",
-        "pose": "walking",
-        "expression": "confident",
-        "angle": "front"
-    }
-
-    test_features = {
-        "garment_type": "hoodie",
-        "color": "dark",
-        "fit": "loose",
-        "gender": "male"
-    }
-
-    scenario = generate_photography_scenario(test_settings, test_features)
-
-    print("Generated Photography Scenario:")
-    print(json.dumps(scenario, indent=2))

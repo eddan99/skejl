@@ -3,14 +3,9 @@ import pandas as pd
 from itertools import product as iterproduct
 from pathlib import Path
 
-_MODEL_DIR = Path(__file__).resolve().parent.parent.parent / 'data' / 'models'
+from tools.taxonomy import IMAGE_STYLES, LIGHTING_TYPES, BACKGROUNDS, POSES, EXPRESSIONS, ANGLES
 
-_STYLES      = ['urban_outdoor', 'studio_minimal', 'lifestyle_indoor', 'casual_lifestyle', 'streetwear', 'lifestyle_outdoor']
-_LIGHTINGS   = ['golden_hour', 'studio', 'natural', 'overcast', 'dramatic']
-_BACKGROUNDS = ['studio_white', 'studio_grey', 'neutral_wall', 'urban_street', 'graffiti_wall', 'nature_outdoor', 'park', 'busy_pattern']
-_POSES       = ['walking', 'standing', 'action', 'sitting', 'dynamic', 'casual']
-_EXPRESSIONS = ['confident', 'serious', 'smiling', 'neutral', 'focused']
-_ANGLES      = ['front', 'side', '3/4', 'back']
+_MODEL_DIR = Path(__file__).resolve().parent.parent.parent / 'data' / 'models'
 
 _IMAGE_SETTINGS = ['style', 'lighting', 'background', 'pose', 'expression', 'angle']
 
@@ -29,7 +24,7 @@ def predict_image_settings(garment_type: str, color: str, fit: str, gender: str)
          'style': st, 'lighting': li, 'background': bg,
          'pose': po, 'expression': ex, 'angle': an}
         for st, li, bg, po, ex, an
-        in iterproduct(_STYLES, _LIGHTINGS, _BACKGROUNDS, _POSES, _EXPRESSIONS, _ANGLES)
+        in iterproduct(IMAGE_STYLES, LIGHTING_TYPES, BACKGROUNDS, POSES, EXPRESSIONS, ANGLES)
     ]
 
     candidates = pd.DataFrame(rows)

@@ -1,6 +1,7 @@
 from google.genai import types
 
 from tools.gemini_client import get_gemini_client
+from tools.image_utils import mime_type, extract_response_image
 from tools.prompts import build_image_gen_prompt, build_variant_prompt
 
 
@@ -11,18 +12,13 @@ def generate_product_image(reference_image_path: str, analysis: dict) -> tuple:
     with open(reference_image_path, "rb") as file:
         original_image_raw_data = file.read()
 
-    if reference_image_path.endswith(".png"):
-        image_type = "image/png"
-    else:
-        image_type = "image/jpeg"
-
     prompt_text = build_image_gen_prompt(analysis)
     decision_log.append("Sending original image and prompt to nano-banana-pro for generation")
 
     response = nano_banana_client.models.generate_content(
         model="nano-banana-pro-preview",
         contents=[
-            types.Part(inline_data=types.Blob(mime_type=image_type, data=original_image_raw_data)),
+            types.Part(inline_data=types.Blob(mime_type=mime_type(reference_image_path), data=original_image_raw_data)),
             types.Part(text=prompt_text)
         ],
         config=types.GenerateContentConfig(
@@ -37,10 +33,10 @@ def generate_product_image(reference_image_path: str, analysis: dict) -> tuple:
         decision_log.append("Decision: Skipping image generation for this product.")
         return None, decision_log
 
-    for part in response.parts:
-        if hasattr(part, "inline_data") and part.inline_data and hasattr(part.inline_data, "data"):
-            decision_log.append("Result: Image generated successfully")
-            return part.inline_data.data, decision_log
+    image_bytes = extract_response_image(response)
+    if image_bytes:
+        decision_log.append("Result: Image generated successfully")
+        return image_bytes, decision_log
 
     decision_log.append("Error: No image in response")
     decision_log.append("Decision: Skipping this product.")
@@ -66,16 +62,9 @@ def generate_variant(approved_image_raw_data: bytes, view_angle: str, original_i
         for img_path in original_image_paths:
             with open(img_path, "rb") as file:
                 img_data = file.read()
-                
-            if img_path.endswith(".png"):
-                img_type = "image/png"
-            else:
-                img_type = "image/jpeg"
-
-            contents.append(types.Part(inline_data=types.Blob(mime_type=img_type, data=img_data)))
+            contents.append(types.Part(inline_data=types.Blob(mime_type=mime_type(img_path), data=img_data)))
 
     contents.append(types.Part(inline_data=types.Blob(mime_type="image/jpeg", data=approved_image_raw_data)))
-
     contents.append(types.Part(text=prompt_text))
 
     response = nano_banana_client.models.generate_content(
@@ -93,10 +82,10 @@ def generate_variant(approved_image_raw_data: bytes, view_angle: str, original_i
         decision_log.append(f"Decision: Skipping {view_angle}-variant.")
         return None, decision_log
 
-    for part in response.parts:
-        if hasattr(part, "inline_data") and part.inline_data and hasattr(part.inline_data, "data"):
-            decision_log.append(f"Result: {view_angle.capitalize()}-variant generated successfully")
-            return part.inline_data.data, decision_log
+    image_bytes = extract_response_image(response)
+    if image_bytes:
+        decision_log.append(f"Result: {view_angle.capitalize()}-variant generated successfully")
+        return image_bytes, decision_log
 
     decision_log.append("Error: No image in response")
     decision_log.append(f"Decision: Skipping {view_angle}-variant.")

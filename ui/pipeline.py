@@ -20,7 +20,7 @@ from tools.image_gen_tool import generate_product_image, generate_variant
 from tools.validation import validate_generated_image, validate_generated_variant
 from tools.shopify_tool import upload_product_to_shopify
 from tools.feedback_loop import record_published_product, get_dataset_size
-from tools.image_utils import crop_to_4_5_ratio
+from tools.image_utils import crop_to_4_5_ratio, extract_response_image
 from tools.ml.ml_predictor import predict_image_settings
 from tools.scenario_generator import generate_photography_scenario
 from tools.gemini_client import get_gemini_client, get_model_name
@@ -30,7 +30,6 @@ from tools.taxonomy import validate_image_settings
 
 
 async def _notify(on_step, name: str, msg: str):
-    """Call on_step, supporting both sync and async callbacks."""
     if on_step is None:
         return
     if asyncio.iscoroutinefunction(on_step):
@@ -52,7 +51,6 @@ def _find_all_product_images(base_image_path: Path) -> list:
 
 
 async def _stream_agent(client, prompt: str, label: str) -> str:
-    """Stream a single Gemini call token-by-token into a live Chainlit message."""
     msg = cl.Message(content=f"**{label}**\n\n")
     await msg.send()
     full_text = ""
@@ -65,7 +63,6 @@ async def _stream_agent(client, prompt: str, label: str) -> str:
 
 
 async def _run_debate_streaming(ml_prediction: dict, features: dict) -> dict:
-    """Streams the 3-agent debate live into the chat. Returns same structure as multi_agent_debate."""
     client = get_gemini_client()
     ml_settings = ml_prediction['image_settings']
 
@@ -99,7 +96,6 @@ async def _generate_and_validate_variants(
     result: dict,
     on_step
 ) -> dict:
-    """Generate side and back variants and return a dict of {angle: path}."""
     original_images = _find_all_product_images(image_path)
     variant_paths = {}
 
@@ -157,13 +153,6 @@ async def _generate_and_validate_variants(
 
 
 async def process_product(image_path: str, use_ml: bool = True, on_step=None, user_hint: str = "") -> dict:
-    """
-    Full pipeline for one product.
-    on_step(step_name, message) is called at each stage — supports both sync
-    and async callbacks. All blocking API calls are offloaded to a thread pool
-    so the event loop stays responsive throughout.
-    Returns a result dict including generated_image_path and variant_paths.
-    """
     ensure_directories()
     image_path = Path(image_path)
 
@@ -217,6 +206,7 @@ async def process_product(image_path: str, use_ml: bool = True, on_step=None, us
         json.dump(result, f, indent=2, ensure_ascii=False)
 
     final_image_bytes = None
+    last_rejection_reason = ""
 
     for attempt in range(1, settings.MAX_GENERATION_ATTEMPTS + 1):
         await _notify(on_step, "generate", f"Generating image (attempt {attempt}/{settings.MAX_GENERATION_ATTEMPTS})...")
@@ -239,23 +229,27 @@ async def process_product(image_path: str, use_ml: bool = True, on_step=None, us
 
         await _notify(on_step, "validate", "Validating generated image...")
         try:
-            is_valid, _ = await asyncio.to_thread(validate_generated_image, str(image_path), image_bytes, result)
+            is_valid, validation_text = await asyncio.to_thread(validate_generated_image, str(image_path), image_bytes, result)
         except Exception as e:
             await _notify(on_step, "validate", f"Validation error on attempt {attempt}: {e}")
             if attempt < settings.MAX_GENERATION_ATTEMPTS:
                 await asyncio.sleep(settings.RATE_LIMIT_DELAY)
             continue
 
-        await _notify(on_step, "validate", f"Validation: {'Approved' if is_valid else 'Rejected'}")
+        reason = validation_text.split("\n", 1)[-1].strip() if "\n" in validation_text else ""
+        await _notify(on_step, "validate", f"Validation: {'Approved' if is_valid else f'Rejected — {reason}'}")
 
         if is_valid:
             final_image_bytes = image_bytes
             break
-        elif attempt < settings.MAX_GENERATION_ATTEMPTS:
-            await asyncio.sleep(settings.RATE_LIMIT_DELAY)
+        else:
+            last_rejection_reason = reason
+            if attempt < settings.MAX_GENERATION_ATTEMPTS:
+                await asyncio.sleep(settings.RATE_LIMIT_DELAY)
 
     result["generated_image_path"] = None
     result["variant_paths"] = {}
+    result["last_rejection_reason"] = last_rejection_reason
 
     if not final_image_bytes:
         await _notify(on_step, "done", f"Could not generate approved image after {settings.MAX_GENERATION_ATTEMPTS} attempts.")
@@ -272,14 +266,6 @@ async def process_product(image_path: str, use_ml: bool = True, on_step=None, us
 
 
 async def refine_and_regenerate(result: dict, image_path: str, feedback: str, on_step=None) -> dict:
-    """
-    Edits the already-generated image based on free-text user feedback.
-    Sends the generated image directly to the image generation model so it
-    makes targeted edits rather than regenerating from scratch.
-    Validates and regenerates side/back variants afterwards.
-    All blocking calls are offloaded to a thread pool.
-    Returns an updated result dict.
-    """
     generated_path = result.get("generated_image_path")
     if not generated_path or not Path(generated_path).exists():
         await _notify(on_step, "refine", "No generated image found — cannot refine.")
@@ -322,12 +308,7 @@ async def refine_and_regenerate(result: dict, image_path: str, feedback: str, on
                 await asyncio.sleep(settings.RATE_LIMIT_DELAY)
             continue
 
-        image_bytes = None
-        if response.parts:
-            for part in response.parts:
-                if hasattr(part, "inline_data") and part.inline_data and hasattr(part.inline_data, "data"):
-                    image_bytes = part.inline_data.data
-                    break
+        image_bytes = extract_response_image(response)
 
         if not image_bytes:
             await _notify(on_step, "generate", "No image returned.")
@@ -371,11 +352,6 @@ async def refine_and_regenerate(result: dict, image_path: str, feedback: str, on
 
 
 def publish_to_shopify(result: dict, image_stem: str) -> str | None:
-    """
-    Uploads the product and all generated images to Shopify.
-    On success, appends a training sample to ctr_dataset.json.
-    Returns the Shopify product ID, or None on failure.
-    """
     generated_images = []
 
     main_img = result.get("generated_image_path")
@@ -404,7 +380,6 @@ def publish_to_shopify(result: dict, image_stem: str) -> str | None:
 
 
 async def process_batch(use_ml: bool = True, on_step=None) -> list:
-    """Processes all product images in data/input/ and returns a list of results."""
     ensure_directories()
     all_images = sorted([f for f in INPUT_DIR.iterdir() if f.suffix in ['.png', '.jpg']])
     images = [img for img in all_images if not ("_back" in img.stem or "_side" in img.stem)]

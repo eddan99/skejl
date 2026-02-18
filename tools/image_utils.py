@@ -1,6 +1,20 @@
 from PIL import Image
 from io import BytesIO
 
+
+def mime_type(path: str) -> str:
+    return "image/png" if str(path).endswith(".png") else "image/jpeg"
+
+
+def extract_response_image(response) -> bytes | None:
+    if not response.parts:
+        return None
+    for part in response.parts:
+        if hasattr(part, "inline_data") and part.inline_data and hasattr(part.inline_data, "data"):
+            return part.inline_data.data
+    return None
+
+
 def crop_to_4_5_ratio(image_bytes: bytes) -> bytes:
     img = Image.open(BytesIO(image_bytes))
     width, height = img.size

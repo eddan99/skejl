@@ -1,18 +1,6 @@
-"""
-Feedback loop: records published products as new training samples.
-
-When a product is published to Shopify, its real garment features and the
-image settings chosen by the debate system are appended to ctr_dataset.json
-with synthetically generated CTR and impressions values.
-
-In production these metrics would be sourced from GA4 (via the Analytics Data
-API) or the Shopify Analytics API. For this study they are simulated to
-demonstrate the full feedback-loop architecture while controlling for the
-absence of live traffic.
-"""
-
 import json
 import random
+from datetime import datetime, timezone
 
 import joblib
 import pandas as pd
@@ -21,6 +9,9 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split
 
 from config.paths import CTR_DATASET_PATH, MODELS_DIR, RF_CTR_MODEL_PATH, FEATURE_COLUMNS_PATH
+from tools.db import get_db
+
+_COLLECTION = "ctr_samples"
 
 _ALL_FEATURES = [
     "garment_type", "color", "fit", "gender",
@@ -31,7 +22,6 @@ _IMAGE_SETTINGS_KEYS = ["style", "lighting", "background", "pose", "expression",
 
 
 def _extract_final_image_settings(result: dict) -> dict | None:
-    """Return the consensus image settings that were actually used."""
     try:
         settings = result["ml_metadata"]["debate_log"]["moderator_decision"]["final_image_settings"]
         if all(k in settings for k in _IMAGE_SETTINGS_KEYS):
@@ -39,7 +29,6 @@ def _extract_final_image_settings(result: dict) -> dict | None:
     except (KeyError, TypeError):
         pass
 
-    # Fallback: raw ML prediction settings
     try:
         settings = result["ml_metadata"]["ml_prediction"]["image_settings"]
         if all(k in settings for k in _IMAGE_SETTINGS_KEYS):
@@ -51,16 +40,6 @@ def _extract_final_image_settings(result: dict) -> dict | None:
 
 
 def record_published_product(result: dict) -> dict | None:
-    """
-    Append one new training sample to ctr_dataset.json.
-
-    Uses the product's real garment features and the image settings chosen
-    by the debate system. CTR is derived from the ML model's predicted value
-    with Gaussian noise (std=0.004) to simulate natural variance.
-    Impressions are sampled uniformly from [500, 5000].
-
-    Returns the appended record, or None if required fields are missing.
-    """
     garment_type = result.get("garment_type", "")
     color = result.get("color", "")
     fit = result.get("fit", "")
@@ -76,7 +55,7 @@ def record_published_product(result: dict) -> dict | None:
     try:
         predicted_ctr = result["ml_metadata"]["ml_prediction"]["predicted_conversion_rate"]
     except (KeyError, TypeError):
-        predicted_ctr = 0.045  # dataset mean as fallback
+        predicted_ctr = 0.045
 
     noisy_ctr = max(0.01, min(0.12, predicted_ctr + random.gauss(0, 0.004)))
 
@@ -89,6 +68,10 @@ def record_published_product(result: dict) -> dict | None:
         "ctr": round(noisy_ctr, 4),
         "impressions": random.randint(500, 5000),
     }
+
+    db = get_db()
+    if db is not None:
+        db.collection(_COLLECTION).add({**record, "published_at": datetime.now(timezone.utc)})
 
     dataset = []
     if CTR_DATASET_PATH.exists():
@@ -104,14 +87,21 @@ def record_published_product(result: dict) -> dict | None:
 
 
 def retrain_model() -> dict:
-    """
-    Retrain the RandomForest CTR model on the current ctr_dataset.json.
-    Mirrors the logic in tools/ml/train_model.ipynb exactly.
-
-    Returns metrics: n_samples, mae, r2.
-    """
-    with open(CTR_DATASET_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    db = get_db()
+    if db is not None:
+        data = []
+        for doc in db.collection(_COLLECTION).stream():
+            record = doc.to_dict()
+            record.pop("published_at", None)
+            data.append(record)
+        if not data and CTR_DATASET_PATH.exists():
+            with open(CTR_DATASET_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+    elif CTR_DATASET_PATH.exists():
+        with open(CTR_DATASET_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = []
 
     df = pd.DataFrame(data)
     X = pd.get_dummies(df[_ALL_FEATURES])
@@ -134,6 +124,9 @@ def retrain_model() -> dict:
 
 
 def get_dataset_size() -> int:
+    db = get_db()
+    if db is not None:
+        return db.collection(_COLLECTION).count().get()[0][0].value
     if not CTR_DATASET_PATH.exists():
         return 0
     with open(CTR_DATASET_PATH, "r", encoding="utf-8") as f:

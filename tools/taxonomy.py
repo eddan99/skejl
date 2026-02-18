@@ -1,14 +1,6 @@
-"""
-Central taxonomy module for data normalization and consistency.
-
-This module defines all valid values for product features and image settings,
-ensuring consistency across products.json, conversion_db.json, and output files.
-"""
-
 from typing import Dict, Any
 
 
-# Product Feature Taxonomies
 GARMENT_TYPES = [
     'hoodie', 'zip-up hoodie', 'sweatshirt',
     't-shirt', 'polo',
@@ -112,20 +104,6 @@ ANGLES = ['3/4', 'back', 'front', 'side']
 
 
 def normalize_color(raw_color: str) -> str:
-    """
-    Normalize color value.
-
-    Examples:
-        "Dark grey" -> "dark grey"
-        "Black" -> "black"
-        "LIGHT" -> "light"
-
-    Args:
-        raw_color: Raw color string from input
-
-    Returns:
-        Normalized lowercase color
-    """
     normalized = raw_color.lower().strip()
     normalized = _COLOR_ALIASES.get(normalized, normalized)
 
@@ -138,23 +116,8 @@ def normalize_color(raw_color: str) -> str:
 
 
 def normalize_fit(raw_fit: str) -> str:
-    """
-    Normalize fit value by removing "fit" suffix.
-
-    Examples:
-        "Loose fit" -> "loose"
-        "Regular Fit" -> "regular"
-        "oversized" -> "oversized"
-
-    Args:
-        raw_fit: Raw fit string from input
-
-    Returns:
-        Normalized lowercase fit without suffix
-    """
     normalized = raw_fit.lower().replace(" fit", "").strip()
 
-    # Validate against taxonomy
     if normalized not in FITS:
         raise ValueError(
             f"Invalid fit '{raw_fit}'. Must be one of: {FITS}"
@@ -164,20 +127,6 @@ def normalize_fit(raw_fit: str) -> str:
 
 
 def normalize_garment_type(raw_type: str) -> str:
-    """
-    Normalize garment type.
-
-    Examples:
-        "Hoodie" -> "hoodie"
-        "T-Shirt" -> "t-shirt"
-        "Zip-up Hoodie" -> "zip-up hoodie"
-
-    Args:
-        raw_type: Raw garment type string
-
-    Returns:
-        Normalized lowercase garment type
-    """
     normalized = raw_type.lower().strip()
     normalized = _GARMENT_ALIASES.get(normalized, normalized)
 
@@ -190,22 +139,8 @@ def normalize_garment_type(raw_type: str) -> str:
 
 
 def normalize_gender(raw_gender: str) -> str:
-    """
-    Normalize gender value.
-
-    Examples:
-        "Male" -> "male"
-        "FEMALE" -> "female"
-
-    Args:
-        raw_gender: Raw gender string
-
-    Returns:
-        Normalized lowercase gender
-    """
     normalized = raw_gender.lower().strip()
 
-    # Validate against taxonomy
     if normalized not in GENDERS:
         raise ValueError(
             f"Invalid gender '{raw_gender}'. Must be one of: {GENDERS}"
@@ -215,21 +150,6 @@ def normalize_gender(raw_gender: str) -> str:
 
 
 def normalize_composition(comp_input: Any) -> str:
-    """
-    Normalize composition from dict or string to standard string format.
-
-    Examples:
-        {"Shell": "100% Cotton"} -> "Shell: 100% Cotton"
-        {"Shell": "60% Cotton", "Lining": "40% Polyester"}
-            -> "Shell: 60% Cotton, Lining: 40% Polyester"
-        "Shell: 100% Cotton" -> "Shell: 100% Cotton"
-
-    Args:
-        comp_input: Composition as dict or string
-
-    Returns:
-        Normalized composition string
-    """
     if isinstance(comp_input, str):
         return comp_input.strip()
 
@@ -243,15 +163,6 @@ def normalize_composition(comp_input: Any) -> str:
 
 
 def validate_image_settings(settings: Dict[str, str]) -> None:
-    """
-    Validate that all image settings match taxonomy values.
-
-    Args:
-        settings: Dict with keys: style, lighting, background, pose, expression, angle
-
-    Raises:
-        ValueError: If any setting value is invalid
-    """
     validations = {
         'style': (settings.get('style'), IMAGE_STYLES),
         'lighting': (settings.get('lighting'), LIGHTING_TYPES),
@@ -272,15 +183,6 @@ def validate_image_settings(settings: Dict[str, str]) -> None:
 
 
 def normalize_product_features(features: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Normalize all product features in one call.
-
-    Args:
-        features: Dict with raw product features
-
-    Returns:
-        Dict with normalized features
-    """
     return {
         'garment_type': normalize_garment_type(features['garment_type']),
         'color': normalize_color(features['color']),
@@ -288,6 +190,5 @@ def normalize_product_features(features: Dict[str, Any]) -> Dict[str, Any]:
         'gender': normalize_gender(features['gender']),
         'composition': normalize_composition(features.get('composition', '')),
         # Preserve other fields as-is
-        **{k: v for k, v in features.items()
-           if k not in ['garment_type', 'color', 'fit', 'gender', 'composition']}
+        **{k: v for k, v in features.items() if k not in ['garment_type', 'color', 'fit', 'gender', 'composition']}
     }
